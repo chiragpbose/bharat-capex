@@ -1,0 +1,389 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum SchemeStatus {
+  ACTIVE
+  PROPOSED
+  CLOSED
+}
+
+enum ReformStatus {
+  PROPOSED
+  NOTIFIED
+  IMPLEMENTED
+  OPERATIONAL
+  STALLED
+  REVERSED
+}
+
+enum ReformDifficulty {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TenderStatus {
+  AWARDED
+  UNDER_EVALUATION
+  CANCELLED
+  COMPLETED
+}
+
+enum PromiseStatus {
+  PENDING
+  DELIVERED
+  MISSED
+  REVISED
+}
+
+enum PromiseSourceType {
+  ANNUAL_REPORT
+  CONCALL
+  AGM
+  EXCHANGE_FILING
+  PRESS_RELEASE
+  INTERVIEW
+}
+
+enum ContributionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ContributionEntityType {
+  REFORM
+  SCHEME
+  TENDER
+  COMPANY
+  MANAGEMENT_PROMISE
+  NEWS_ITEM
+}
+
+// ─────────────────────────────────────────────
+// SECTORS
+// ─────────────────────────────────────────────
+
+model Sector {
+  id               String  @id @default(cuid())
+  name             String  @unique
+  slug             String  @unique
+  description      String?
+  color            String?
+  govtOutlayCrore  Float?  // budget allocation + scheme outlay
+  orderBookCrore   Float?  // aggregate order book of listed companies
+
+  createdAt DateTime @default(now())
+
+  companies CompanySector[]
+  reforms   Reform[]
+  tenders   Tender[]
+  news      NewsItem[]
+  schemes   Schemesector[]
+
+  @@index([slug])
+}
+
+// ─────────────────────────────────────────────
+// COMPANIES
+// ─────────────────────────────────────────────
+
+model Company {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  tickerNse   String? @unique
+  tickerBse   String? @unique
+  isin        String? @unique
+  description String?
+  logoUrl     String?
+  websiteUrl  String?
+
+  // Snapshot financials — updated periodically, not time-series
+  revenueCrore      Float?
+  patCrore          Float?
+  orderBookCrore    Float?
+  marketCapCrore    Float?
+  capexPlannedCrore Float?
+  revenueGrowthPct  Float?
+  roce              Float?
+  debtEquityRatio   Float?
+  recentWin         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sectors      CompanySector[]
+  schemes      CompanyScheme[]
+  tenders      Tender[]
+  fundamentals CompanyFundamentals[]
+  promises     ManagementPromise[]
+  news         NewsCompany[]
+  contributions UserContribution[]
+
+  @@index([tickerNse])
+  @@index([slug])
+}
+
+model CompanySector {
+  companyId String
+  sectorId  String
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sector  Sector  @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, sectorId])
+}
+
+// ─────────────────────────────────────────────
+// SCHEMES
+// PLI, mission programs, infrastructure initiatives
+// ─────────────────────────────────────────────
+
+model Scheme {
+  id                  String       @id @default(cuid())
+  name                String
+  shortName           String?
+  slug                String       @unique
+  status              SchemeStatus @default(ACTIVE)
+  description         String?
+  ministry            String?
+  color               String?
+  highlight           String?
+
+  budgetOutlayCrore    Float?
+  disbursedCrore       Float?
+  totalInvestmentCrore Float?
+  approvedProjects     Int?
+  jobsTargeted         Int?
+
+  schemeStartYear Int?
+  schemeEndYear   Int?
+  sourceUrl       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sectors   Schemesector[]
+  companies CompanyScheme[]
+  tenders   TenderScheme[]
+  reforms   Reform[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+// Junction: Scheme ↔ Sector
+model Schemesector {
+  schemeId String
+  sectorId String
+
+  scheme Scheme @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  sector Sector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@id([schemeId, sectorId])
+}
+
+// Junction: Company ↔ Scheme
+model CompanyScheme {
+  companyId String
+  schemeId  String
+  note      String?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  scheme  Scheme  @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, schemeId])
+}
+
+// ─────────────────────────────────────────────
+// REFORMS
+// ─────────────────────────────────────────────
+
+model Reform {
+  id                    String           @id @default(cuid())
+  title                 String
+  slug                  String           @unique
+  summary               String
+  body                  String?
+  status                ReformStatus     @default(PROPOSED)
+  difficulty            ReformDifficulty @default(MEDIUM)
+  note                  String?
+
+  budgetOutlayCrore     Float?
+  fdiCommittedCrore     Float?
+  marketOpportunityCrore Float?
+
+  sectorId   String
+  schemeId   String?
+  notifiedAt DateTime?
+  sourceUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sector Sector  @relation(fields: [sectorId], references: [id])
+  scheme Scheme? @relation(fields: [schemeId], references: [id])
+  news   NewsItem[]
+
+  @@index([slug])
+  @@index([status])
+  @@index([sectorId])
+}
+
+// ─────────────────────────────────────────────
+// TENDERS
+// ─────────────────────────────────────────────
+
+model Tender {
+  id               String       @id @default(cuid())
+  title            String
+  slug             String       @unique
+  description      String?
+  status           TenderStatus @default(AWARDED)
+  valueCrore       Float?
+  awardedAt        DateTime?
+  completionMonths Int?
+  awardingBody     String
+  sourceUrl        String?
+  companyId        String
+  sectorId         String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company      @relation(fields: [companyId], references: [id])
+  sector  Sector       @relation(fields: [sectorId], references: [id])
+  schemes TenderScheme[]
+  news    NewsItem[]
+
+  @@index([companyId])
+  @@index([sectorId])
+  @@index([awardedAt])
+}
+
+model TenderScheme {
+  tenderId String
+  schemeId String
+
+  tender Tender @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  scheme Scheme @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+
+  @@id([tenderId, schemeId])
+}
+
+// ─────────────────────────────────────────────
+// COMPANY FUNDAMENTALS (time-series)
+// ─────────────────────────────────────────────
+
+model CompanyFundamentals {
+  id              String @id @default(cuid())
+  companyId       String
+  period          String // "Q3FY25", "FY25"
+  revenueCrore    Float?
+  patCrore        Float?
+  roce            Float?
+  debtEquityRatio Float?
+  orderBookCrore  Float?
+  capexCrore      Float?
+  createdAt       DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, period])
+  @@index([companyId])
+}
+
+// ─────────────────────────────────────────────
+// MANAGEMENT PROMISES
+// ─────────────────────────────────────────────
+
+model ManagementPromise {
+  id         String            @id @default(cuid())
+  companyId  String
+  quote      String
+  speaker    String
+  sourceType PromiseSourceType
+  sourceUrl  String?
+  madeOn     DateTime
+  deadline   DateTime?
+  status     PromiseStatus     @default(PENDING)
+  resolution String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([status])
+  @@index([deadline])
+}
+
+// ─────────────────────────────────────────────
+// NEWS ITEMS
+// ─────────────────────────────────────────────
+
+model NewsItem {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String?
+  sourceUrl   String
+  publishedAt DateTime
+  sourceLabel String?
+  sectorId    String?
+  reformId    String?
+  tenderId    String?
+  createdAt   DateTime @default(now())
+
+  sector    Sector?   @relation(fields: [sectorId], references: [id])
+  reform    Reform?   @relation(fields: [reformId], references: [id])
+  tender    Tender?   @relation(fields: [tenderId], references: [id])
+  companies NewsCompany[]
+
+  @@index([publishedAt])
+  @@index([sectorId])
+}
+
+model NewsCompany {
+  newsItemId String
+  companyId  String
+
+  newsItem NewsItem @relation(fields: [newsItemId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([newsItemId, companyId])
+}
+
+// ─────────────────────────────────────────────
+// USER CONTRIBUTIONS
+// ─────────────────────────────────────────────
+
+model UserContribution {
+  id          String                 @id @default(cuid())
+  entityType  ContributionEntityType
+  entityId    String?
+  content     Json
+  sourceUrl   String
+  submittedBy String?
+  status      ContributionStatus     @default(PENDING)
+  reviewNote  String?
+  companyId   String?
+  createdAt   DateTime               @default(now())
+  reviewedAt  DateTime?
+
+  company Company? @relation(fields: [companyId], references: [id])
+
+  @@index([status])
+  @@index([entityType])
+}
