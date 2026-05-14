@@ -15,16 +15,33 @@ Most retail investors miss the chain:
 Policy Reform → Government Scheme → Tender Awarded → Company Order Book → Stock Price
 ```
 
-By the time something shows up in a company's quarterly results, the smart money has already moved. **BharatCapex makes the entire chain visible, trackable, and searchable — in real time.**
+By the time something shows up in a company's quarterly results, the smart money has already moved. **BharatCapex makes the entire chain visible, trackable, and searchable — automatically.**
 
-**Dual purpose:**
-- **Civic transparency** — citizens can see where public money is going and whether reforms are actually being implemented
-- **Investment research** — investors can identify which listed companies are positioned to capture government capex before it shows up in earnings
+**Primary purpose:** Personal investment research OS — a tool to build conviction on which NSE/BSE-listed companies are structurally positioned to win from India's industrial buildout, before the thesis shows up in earnings.
+
+**Secondary purpose:** Share with friends, family, and fellow investors who follow the same macro thesis.
+
+**Monetisation:** Not a current goal. May become relevant later if the data and product prove genuinely useful to a wider audience.
 
 **The edge it gives an investor:**
-- Reforms are the *leading indicator* — they signal where money will flow
+- Reforms are the *leading indicator* — they signal where money will flow 12–18 months out
 - Tenders are the *coincident indicator* — they show where money is flowing right now
 - Company order books are the *stock catalyst* — who is capturing it, and at what scale
+- Management promises vs. delivery is the *quality filter* — separating execution-first companies from story stocks
+
+**Crucially:** Chirag is not starting with a pre-defined stock watchlist. He has a thesis. The platform must surface the relevant companies automatically from the policy-tender chain — not require him to know them in advance.
+
+```
+Reform notified (e.g. Nuclear sector opens to private players)
+        ↓
+Platform identifies: which NSE/BSE companies operate in this space?
+        ↓
+Surfaces: NTPC, L&T (EPC), Tata Power, Thermax (equipment)
+        ↓
+Chirag reviews: order books, management promises, valuations
+        ↓
+Build conviction. Hold 2–3 years.
+```
 
 ---
 
@@ -32,19 +49,26 @@ By the time something shows up in a company's quarterly results, the smart money
 
 **Name:** BharatCapex  
 **URL:** bharatcapex.in (planned)  
-**Target user:** Retail investors and analysts tracking India's infrastructure and manufacturing buildout
+**Primary user:** Chirag — personal investment research. Secondarily, friends, family, fellow investors.
 
 **Core sections:**
 | Section | What it does |
 |---|---|
-| Homepage | Feed-first view of latest activity (tenders + reform moves), sector capex bars, company movers |
+| Homepage | Feed-first view of latest automated activity (tenders + reform moves), sector capex bars, company movers |
 | Reforms | Every major policy reform — status tracked from Proposed → Notified → Implemented → Operational |
 | Tenders | Contract awards feed — which listed company won what, for how much, under which scheme |
 | Schemes | PLI, Gati Shakti, Sagarmala, etc. — outlay, disbursement progress, beneficiary companies |
 | Companies | NSE/BSE-listed companies — financials, order book, tenders won, linked reforms, scheme beneficiary status |
+| Promises | Management accountability tracker — what was said, by whom, by when, and whether it happened |
+| Calendar | Forward-looking policy events — PLI disbursement deadlines, budget dates, scheme windows, upcoming tenders |
 
 **Value proposition in one line:**  
 *"See the government's money move before the market does."*
+
+**What BharatCapex is NOT:**
+- Not a trading signal tool — it will not tell you to buy today because a tender was announced today
+- Not a real-time price tracker — use Screener.in or Tijori for that
+- Not a tips platform — it builds conviction over 2–3 year horizons, not 2–3 day trades
 
 ---
 
@@ -69,6 +93,16 @@ By the time something shows up in a company's quarterly results, the smart money
 - Constructor requires driver adapter: `new PrismaClient({ adapter: new PrismaPg(pool) })`
 - DB client lives at `src/lib/db.ts` using singleton pattern
 
+**Data pipeline stack (to be built):**
+| Layer | Technology | Notes |
+|---|---|---|
+| Scraping (static) | Cheerio + node-fetch | PIB, news sites, ministry pages |
+| Scraping (JS-heavy) | Playwright | CPPP, GeM, BSE bulk download |
+| PDF extraction | pdf-parse + Claude API | Annual reports, concall transcripts |
+| AI processing | Claude API (claude-sonnet-4-20250514) | Entity extraction, company tagging, promise detection |
+| Job scheduling | Supabase Edge Functions or node-cron | Runs scrapers on schedule |
+| Raw storage | Supabase Storage | Stores raw HTML, PDFs before processing |
+
 ---
 
 ## 4. What's Been Built
@@ -85,8 +119,10 @@ By the time something shows up in a company's quarterly results, the smart money
 | `/tenders` | ✅ Complete | Sector filter, tender feed with value + company + scheme |
 | `/schemes` | ✅ Complete | Disbursement progress bars, investment multiplier, jobs targeted |
 | `/schemes/[slug]` | ✅ Complete | Full scheme detail, listed beneficiaries, linked reforms, related schemes |
-| `/contribute` | ❌ Not built | Community submission form |
-| `/news` | ❌ Not built | Curated news feed |
+| `/promises` | ❌ Not built | Management accountability tracker |
+| `/calendar` | ❌ Not built | Forward-looking policy + scheme event calendar |
+| `/contribute` | ❌ Not built | Deferred indefinitely — no public users, no community layer needed yet |
+| `/news` | ❌ Not built | Will be replaced by automated pipeline feed, not a manual page |
 
 ### Key files
 
@@ -112,14 +148,13 @@ src/
 prisma/
 ├── schema.prisma                   Full DB schema (13 models)
 └── prisma.config.ts                Prisma 7 config
-
 ```
 
 ### Data currently in seed-data.ts
 - **10 sectors** with govt outlay + order book figures
 - **6 reforms** (Defence FDI, PLI Semicon, Gati Shakti, Nuclear private, DFC, Ship recycling)
 - **6 companies** (LT, BEL, RVNL, KNRCON, Cochin Shipyard, NTPC)
-- **5 tenders** 
+- **5 tenders**
 - **7 schemes** (PLI Semicon, Gati Shakti, PLI Defence, PLI Solar, Sagarmala, Green H₂, PLI Telecom)
 - All figures are realistic estimates, not actual verified data
 
@@ -137,30 +172,39 @@ prisma/
 
 1. **Zero real data** — Everything is hardcoded in `seed-data.ts`. The product looks complete but contains no verified information.
 2. **No database connection** — Supabase project not yet created. Schema is written and validated, waiting for credentials.
-3. **No search** — Can't search across companies, reforms, or tenders.
-4. **No auth** — No user accounts, no watchlists, no personalisation.
-5. **No admin panel** — Can only add data by editing TypeScript files.
-6. **No scrapers** — Data entry is 100% manual.
+3. **No data pipeline** — No scrapers, no AI extraction, no scheduled jobs. All data is static and manual.
+4. **No search** — Can't search across companies, reforms, or tenders.
+5. **No auth** — No user accounts, no watchlists, no personalisation.
+6. **No admin panel** — Only needed if manual entry is ever required. Not priority.
+7. **Company discovery is missing** — The platform cannot yet surface companies from reforms/tenders automatically. This is core to the vision.
 
 ---
 
 ## 6. High-Level Roadmap
 
 ### Phase 1 — Real Data (CURRENT PRIORITY)
-Connect the database and fill it with accurate, sourced information. This is what turns a prototype into a product.
+Connect the database and activate the automated data pipeline. This is what turns a prototype into a tool that actually earns money in the market.
 
-### Phase 2 — Content Depth
-Pages that require data to be useful: Management Promises, Policy Calendar, News Feed, Budget Tracker.
+**The pipeline architecture:**
+```
+Sources → Scrapers/Fetchers → Raw Storage → AI Extraction → Structured DB → Frontend
+```
 
-### Phase 3 — User Features
-Search, watchlists, email digest. Requires auth (Supabase Auth).
+### Phase 2 — Company Discovery Engine
+The platform surfaces relevant NSE/BSE-listed companies automatically from the policy-tender chain. A new reform triggers a lookup: which companies operate in this sector? Which have won related tenders? This is the core investment utility.
 
-### Phase 4 — Data Pipelines
-Admin panel → community contributions → eventually automated scrapers.
+### Phase 3 — Conviction-Building Features
+Management Promises tracker, Policy Calendar, Budget Tracker. These are the features that differentiate BharatCapex from anything else available.
+
+### Phase 4 — User Features
+Search, watchlists, email digest. Requires auth (Supabase Auth). Only needed once the data is real and the personal utility is proven.
+
+### Phase 5 — Reassess Monetisation
+If the product proves genuinely useful and the data is solid, revisit: freemium subscription, API access for other tools, or B2B data licensing. Not before Phase 4.
 
 ---
 
-## 7. Immediate Next Steps (Low Level)
+## 7. Immediate Next Steps
 
 ### Step 1: Connect Supabase
 1. Create project at supabase.com — choose `ap-south-1` (Mumbai)
@@ -169,52 +213,121 @@ Admin panel → community contributions → eventually automated scrapers.
 4. Fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 5. Run `npx prisma db push` — creates all tables
 
-### Step 2: Write the seed script
-File: `prisma/seed.ts`  
-Real data to include:
-- **~25 companies** — large caps (LT, BEL, NTPC, HAL, RVNL), mid caps (KNR, IRCON, Titagarh, Mazagon Dock, BEML, Cochin Shipyard, BHEL), emerging (Dixon, Kaynes, Waaree, Premier Energies)
-- **~40 reforms** — covering all 10 sectors, spanning 2014–2025
-- **~80 tenders** — sourced from NHAI, MoD, Railways, NTPC, Sagarmala press releases
-- **10 schemes** — all major PLI schemes + infra programs
-- All entries must have a real `sourceUrl` (PIB, ministry website, BSE filing)
+### Step 2: Build the BSE filings scraper (first pipeline)
+BSE company announcements are the highest-ROI first source. Structured, free, reliable, updated daily. Covers order wins, quarterly results, capex announcements for every listed company.
 
-### Step 3: Switch pages off seed-data
+File: `src/lib/pipeline/sources/bse-filings.ts`
+
+What it does:
+- Fetches BSE bulk announcement download (CSV/XML — available free)
+- Filters for announcement types relevant to the thesis: order wins, capex guidance, quarterly results, scheme-related filings
+- Stores raw announcements in Supabase Storage
+
+### Step 3: Build the AI extraction layer
+File: `src/lib/pipeline/extract/extract-announcement.ts`
+
+What it does:
+- Sends raw BSE announcement text to Claude API
+- Prompt: "Extract: company name, ticker, announcement type, contract value if present, counterparty (awarding authority), sector, scheme if mentioned. Return as JSON."
+- Writes structured output to DB via Prisma
+
+### Step 4: Add PIB + news RSS feeds
+File: `src/lib/pipeline/sources/rss-feeds.ts`
+
+Sources (all free, no scraping needed):
+- PIB RSS: `https://pib.gov.in/RssMain.aspx`
+- Economic Times infrastructure RSS
+- Business Standard economy RSS
+- Each item goes through the same AI extraction pipeline as BSE announcements
+
+### Step 5: CPPP tender scraper
+File: `src/lib/pipeline/sources/cppp-scraper.ts`
+
+Hardest source but highest signal for the Tenders section. Requires Playwright (JS-heavy site). Build after the RSS pipeline is proven.
+
+### Step 6: PDF pipeline for Management Promises
+File: `src/lib/pipeline/sources/pdf-fetcher.ts`
+
+- Downloads annual reports and concall transcripts from BSE filings
+- Sends to Claude API with a specific prompt to extract management promises
+- Populates the `ManagementPromise` table automatically
+
+### Step 7: Switch pages off seed-data
 Replace all `import { ... } from "@/lib/seed-data"` with queries through `src/lib/db.ts`.
-Create a proper data access layer at `src/lib/data/`:
+
+Data access layer at `src/lib/data/`:
 - `src/lib/data/reforms.ts`
 - `src/lib/data/companies.ts`
 - `src/lib/data/tenders.ts`
 - `src/lib/data/schemes.ts`
 - `src/lib/data/sectors.ts`
 
-### Step 4: Build remaining UI (Phase 2)
+### Step 8: Build remaining UI (Phase 3)
 Once real data is flowing:
 
-**Management Promises** `/companies/[slug]` gets a new section + standalone `/promises` page
-- Fields: quote, speaker, source (concall/annual report), date made, deadline, status (pending/delivered/missed), resolution
-- This is the most unique feature — no other platform tracks this
+**Management Promises** `/promises` + section on `/companies/[slug]`
+- Quote, speaker, source type (concall / annual report / AGM / exchange filing), date, deadline, status, resolution
+- The most unique feature on the platform — no other tool tracks this
 
 **Policy Calendar** `/calendar`
 - Forward-looking: PLI disbursement deadlines, budget dates, scheme windows, upcoming tender floats
-- Simple month/week view, filterable by sector
-
-**News Feed** `/news`
-- Curated articles tagged to company + sector + reform
-- Not a scraper — manually logged with source URL + relevance tags
+- Month/week view, filterable by sector
 
 **Budget Tracker** `/budget`
 - Union Budget allocations by sector, year-over-year
-- Bar chart: which sectors got more/less than last year
+- Bar chart: which sectors got more/less than previous year
 
 ---
 
-## 8. Product Decisions Made
+## 8. Data Source Map
+
+| Source | Signal type | Method | Priority | Cost |
+|---|---|---|---|---|
+| BSE bulk download | Order wins, results, capex guidance | Playwright / API | 🔴 First | Free |
+| PIB RSS | Reform notifications, scheme disbursals | RSS parser | 🔴 First | Free |
+| News RSS (ET, BS, Mint) | Sector news, tender coverage | RSS parser | 🔴 First | Free |
+| NITI Aayog | Policy documents, sector outlooks | Playwright + PDF | 🟡 Second | Free |
+| Ministry websites | Scheme notifications, press releases | Playwright | 🟡 Second | Free |
+| CPPP | Raw tender awards | Playwright (hard) | 🟡 Second | Free |
+| GeM portal | Procurement data | API (limited) | 🟢 Third | Free |
+| Annual reports / concalls | Management promises | PDF + Claude API | 🟡 Second | API cost |
+| X / Twitter | Real-time community signal | X API (expensive) | 🔵 Defer | ₹8k+/month |
+
+**On X/Twitter:** The infra investing community on X is the best real-time signal source. But API access is prohibitively expensive for personal use. Practical approach for now: manually save high-signal tweets via a bookmarklet → auto-tagged into DB. Revisit programmatic access if budget allows later.
+
+---
+
+## 9. Product Decisions Made
 
 - **No orange** — more professional feel, use blue-600 as primary
 - **Hybrid feed design** — not Bloomberg-dense, not editorial-only. 3 highlight cards + scannable feed rows
 - **Sector dual bars** — govt outlay vs listed company order book (the gap tells a story)
 - **LinkedIn-style dropdowns** — not tab bars or checkbox lists for filters
 - **Feed-first homepage** — returning investor doesn't need the hero explained every time; hero shrunk to slim strip
+- **Seed data first** — build UI without DB, switch later. Allows fast iteration on design. ✅ Done.
+- **Space Grotesk** — replaced Instrument Serif (too Times New Roman) for display/numbers
+- **No manual data entry** — all data flows from automated pipeline. No admin forms, no TypeScript editing.
+- **No community contributions (yet)** — no public users, no need. Defer indefinitely.
+- **No monetisation (yet)** — build for personal use first. Let the product prove its value before commercialising.
+- **Company discovery over watchlists** — Chirag doesn't start with known stocks. The platform surfaces companies from the policy-tender chain. Discovery is the core utility.
+- **2–3 year conviction horizon** — BharatCapex is not a trading tool. It is a research tool for long-hold positions driven by structural policy tailwinds.
+
+---
+
+## 10. The Bigger Picture
+
+Once the data pipeline is live and real investment utility is proven:
+
+- **State-level tracker** — not just central govt, but state industrial policies (Gujarat, Maharashtra, Tamil Nadu are most active)
+- **Email digest** — "This week in India capex" — weekly summary of biggest tenders, reform moves, company order wins
+- **API** — let other tools (screeners, portfolio trackers) pull this data. B2B licensing may be faster revenue than B2C subscription.
+- **Mobile app** — eventually, once the web product is proven
+- **Monetisation** — freemium: basic data free, deep company intelligence + alerts behind a subscription (~₹999–2,999/month for a professional tier). SEBI Research Analyst registration may be required before formal monetisation.
+
+---
+
+*Next session: Connect Supabase. Build the BSE filings scraper. First real data in the DB.*
+explained every time; hero shrunk to slim strip
 - **Seed data first** — build UI without DB, switch later. Allows fast iteration on design.
 - **Space Grotesk** — replaced Instrument Serif (too Times New Roman) for display/numbers
 
