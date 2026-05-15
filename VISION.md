@@ -24,10 +24,11 @@ By the time something shows up in a company's quarterly results, the smart money
 **Monetisation:** Not a current goal. May become relevant later if the data and product prove genuinely useful to a wider audience.
 
 **The edge it gives an investor:**
-- Reforms are the *leading indicator* — they signal where money will flow 12–18 months out
-- Tenders are the *coincident indicator* — they show where money is flowing right now
-- Company order books are the *stock catalyst* — who is capturing it, and at what scale
-- Management promises vs. delivery is the *quality filter* — separating execution-first companies from story stocks
+
+- Reforms are the _leading indicator_ — they signal where money will flow 12–18 months out
+- Tenders are the _coincident indicator_ — they show where money is flowing right now
+- Company order books are the _stock catalyst_ — who is capturing it, and at what scale
+- Management promises vs. delivery is the _quality filter_ — separating execution-first companies from story stocks
 
 **Crucially:** Chirag is not starting with a pre-defined stock watchlist. He has a thesis. The platform must surface the relevant companies automatically from the policy-tender chain — not require him to know them in advance.
 
@@ -63,9 +64,10 @@ Build conviction. Hold 2–3 years.
 | Calendar | Forward-looking policy events — PLI disbursement deadlines, budget dates, scheme windows, upcoming tenders |
 
 **Value proposition in one line:**  
-*"See the government's money move before the market does."*
+_"See the government's money move before the market does."_
 
 **What BharatCapex is NOT:**
+
 - Not a trading signal tool — it will not tell you to buy today because a tender was announced today
 - Not a real-time price tracker — use Screener.in or Tijori for that
 - Not a tips platform — it builds conviction over 2–3 year horizons, not 2–3 day trades
@@ -74,19 +76,20 @@ Build conviction. Hold 2–3 years.
 
 ## 3. Tech Stack
 
-| Layer | Technology | Notes |
-|---|---|---|
-| Framework | Next.js 16.2.6 (App Router) | `params` is `Promise<{...}>`, must `await params` |
-| Language | TypeScript | Strict mode |
-| Styling | Tailwind CSS v4 | `@theme inline`, canonical class form e.g. `supports-backdrop-filter:` |
-| UI Components | shadcn/ui (base-ui variant) | Uses `@base-ui/react` not `@radix-ui` |
-| Fonts | Space Grotesk (display) · DM Sans (body) · DM Mono | All via `next/font/google` |
-| ORM | Prisma 7.8.0 | Requires `prisma.config.ts` + driver adapter — see notes |
-| Database | Supabase (PostgreSQL) | **NOT YET CONNECTED** |
-| Validation | Zod v4.4.3 | `z.record(z.string(), z.unknown())` — `.refine()` API changed |
-| React | v19 | `<Context value={...}>` not `<Context.Provider>` |
+| Layer         | Technology                                         | Notes                                                                  |
+| ------------- | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| Framework     | Next.js 16.2.6 (App Router)                        | `params` is `Promise<{...}>`, must `await params`                      |
+| Language      | TypeScript                                         | Strict mode                                                            |
+| Styling       | Tailwind CSS v4                                    | `@theme inline`, canonical class form e.g. `supports-backdrop-filter:` |
+| UI Components | shadcn/ui (base-ui variant)                        | Uses `@base-ui/react` not `@radix-ui`                                  |
+| Fonts         | Space Grotesk (display) · DM Sans (body) · DM Mono | All via `next/font/google`                                             |
+| ORM           | Prisma 7.8.0                                       | Requires `prisma.config.ts` + driver adapter — see notes               |
+| Database      | Supabase (PostgreSQL)                              | **NOT YET CONNECTED**                                                  |
+| Validation    | Zod v4.4.3                                         | `z.record(z.string(), z.unknown())` — `.refine()` API changed          |
+| React         | v19                                                | `<Context value={...}>` not `<Context.Provider>`                       |
 
 **Critical Prisma 7 gotchas:**
+
 - Config lives in `prisma.config.ts`, not inside `schema.prisma`
 - Generator: `provider = "prisma-client"`, output: `../src/generated/prisma`
 - Import from `@/generated/prisma/client` (no index.ts generated)
@@ -109,20 +112,20 @@ Build conviction. Hold 2–3 years.
 
 ### Pages
 
-| Route | Status | Notes |
-|---|---|---|
-| `/` | ✅ Complete | Feed-first, 3 signal cards, activity feed, dual-bar sector chart, company movers |
-| `/reforms` | ✅ Complete | LinkedIn-style dropdown filters (Status + Sector), reform cards with status stripe |
-| `/reforms/[slug]` | ✅ Complete | Journey tracker, money metrics, beneficiary companies, related reforms |
-| `/companies` | ✅ Complete | Sector filter pills, company cards, dual-bar sector overview chart |
-| `/companies/[slug]` | ✅ Complete | Financials, tenders won, related reforms, sector exposure |
-| `/tenders` | ✅ Complete | Sector filter, tender feed with value + company + scheme |
-| `/schemes` | ✅ Complete | Disbursement progress bars, investment multiplier, jobs targeted |
-| `/schemes/[slug]` | ✅ Complete | Full scheme detail, listed beneficiaries, linked reforms, related schemes |
-| `/promises` | ❌ Not built | Management accountability tracker |
-| `/calendar` | ❌ Not built | Forward-looking policy + scheme event calendar |
-| `/contribute` | ❌ Not built | Deferred indefinitely — no public users, no community layer needed yet |
-| `/news` | ❌ Not built | Will be replaced by automated pipeline feed, not a manual page |
+| Route               | Status       | Notes                                                                              |
+| ------------------- | ------------ | ---------------------------------------------------------------------------------- |
+| `/`                 | ✅ Complete  | Feed-first, 3 signal cards, activity feed, dual-bar sector chart, company movers   |
+| `/reforms`          | ✅ Complete  | LinkedIn-style dropdown filters (Status + Sector), reform cards with status stripe |
+| `/reforms/[slug]`   | ✅ Complete  | Journey tracker, money metrics, beneficiary companies, related reforms             |
+| `/companies`        | ✅ Complete  | Sector filter pills, company cards, dual-bar sector overview chart                 |
+| `/companies/[slug]` | ✅ Complete  | Financials, tenders won, related reforms, sector exposure                          |
+| `/tenders`          | ✅ Complete  | Sector filter, tender feed with value + company + scheme                           |
+| `/schemes`          | ✅ Complete  | Disbursement progress bars, investment multiplier, jobs targeted                   |
+| `/schemes/[slug]`   | ✅ Complete  | Full scheme detail, listed beneficiaries, linked reforms, related schemes          |
+| `/promises`         | ❌ Not built | Management accountability tracker                                                  |
+| `/calendar`         | ❌ Not built | Forward-looking policy + scheme event calendar                                     |
+| `/contribute`       | ❌ Not built | Deferred indefinitely — no public users, no community layer needed yet             |
+| `/news`             | ❌ Not built | Will be replaced by automated pipeline feed, not a manual page                     |
 
 ### Key files
 
@@ -151,6 +154,7 @@ prisma/
 ```
 
 ### Data currently in seed-data.ts
+
 - **10 sectors** with govt outlay + order book figures
 - **6 reforms** (Defence FDI, PLI Semicon, Gati Shakti, Nuclear private, DFC, Ship recycling)
 - **6 companies** (LT, BEL, RVNL, KNRCON, Cochin Shipyard, NTPC)
@@ -159,6 +163,7 @@ prisma/
 - All figures are realistic estimates, not actual verified data
 
 ### Design system
+
 - Warm off-white background with subtle dot grid texture
 - Classic blue-600 (`oklch(0.546 0.245 262)`) as primary accent
 - Each sector has its own hex colour used consistently across all pages
@@ -183,23 +188,29 @@ prisma/
 ## 6. High-Level Roadmap
 
 ### Phase 1 — Real Data (CURRENT PRIORITY)
+
 Connect the database and activate the automated data pipeline. This is what turns a prototype into a tool that actually earns money in the market.
 
 **The pipeline architecture:**
+
 ```
 Sources → Scrapers/Fetchers → Raw Storage → AI Extraction → Structured DB → Frontend
 ```
 
 ### Phase 2 — Company Discovery Engine
+
 The platform surfaces relevant NSE/BSE-listed companies automatically from the policy-tender chain. A new reform triggers a lookup: which companies operate in this sector? Which have won related tenders? This is the core investment utility.
 
 ### Phase 3 — Conviction-Building Features
+
 Management Promises tracker, Policy Calendar, Budget Tracker. These are the features that differentiate BharatCapex from anything else available.
 
 ### Phase 4 — User Features
+
 Search, watchlists, email digest. Requires auth (Supabase Auth). Only needed once the data is real and the personal utility is proven.
 
 ### Phase 5 — Reassess Monetisation
+
 If the product proves genuinely useful and the data is solid, revisit: freemium subscription, API access for other tools, or B2B data licensing. Not before Phase 4.
 
 ---
@@ -207,6 +218,7 @@ If the product proves genuinely useful and the data is solid, revisit: freemium 
 ## 7. Immediate Next Steps
 
 ### Step 1: Connect Supabase
+
 1. Create project at supabase.com — choose `ap-south-1` (Mumbai)
 2. Copy `.env.example` to `.env`
 3. Fill in `DATABASE_URL` (Transaction pooler, port 6543) and `DIRECT_URL` (Direct, port 5432)
@@ -214,38 +226,46 @@ If the product proves genuinely useful and the data is solid, revisit: freemium 
 5. Run `npx prisma db push` — creates all tables
 
 ### Step 2: Build the BSE filings scraper (first pipeline)
+
 BSE company announcements are the highest-ROI first source. Structured, free, reliable, updated daily. Covers order wins, quarterly results, capex announcements for every listed company.
 
 File: `src/lib/pipeline/sources/bse-filings.ts`
 
 What it does:
+
 - Fetches BSE bulk announcement download (CSV/XML — available free)
 - Filters for announcement types relevant to the thesis: order wins, capex guidance, quarterly results, scheme-related filings
 - Stores raw announcements in Supabase Storage
 
 ### Step 3: Build the AI extraction layer
+
 File: `src/lib/pipeline/extract/extract-announcement.ts`
 
 What it does:
+
 - Sends raw BSE announcement text to Claude API
 - Prompt: "Extract: company name, ticker, announcement type, contract value if present, counterparty (awarding authority), sector, scheme if mentioned. Return as JSON."
 - Writes structured output to DB via Prisma
 
 ### Step 4: Add PIB + news RSS feeds
+
 File: `src/lib/pipeline/sources/rss-feeds.ts`
 
 Sources (all free, no scraping needed):
+
 - PIB RSS: `https://pib.gov.in/RssMain.aspx`
 - Economic Times infrastructure RSS
 - Business Standard economy RSS
 - Each item goes through the same AI extraction pipeline as BSE announcements
 
 ### Step 5: CPPP tender scraper
+
 File: `src/lib/pipeline/sources/cppp-scraper.ts`
 
 Hardest source but highest signal for the Tenders section. Requires Playwright (JS-heavy site). Build after the RSS pipeline is proven.
 
 ### Step 6: PDF pipeline for Management Promises
+
 File: `src/lib/pipeline/sources/pdf-fetcher.ts`
 
 - Downloads annual reports and concall transcripts from BSE filings
@@ -253,9 +273,11 @@ File: `src/lib/pipeline/sources/pdf-fetcher.ts`
 - Populates the `ManagementPromise` table automatically
 
 ### Step 7: Switch pages off seed-data
+
 Replace all `import { ... } from "@/lib/seed-data"` with queries through `src/lib/db.ts`.
 
 Data access layer at `src/lib/data/`:
+
 - `src/lib/data/reforms.ts`
 - `src/lib/data/companies.ts`
 - `src/lib/data/tenders.ts`
@@ -263,17 +285,21 @@ Data access layer at `src/lib/data/`:
 - `src/lib/data/sectors.ts`
 
 ### Step 8: Build remaining UI (Phase 3)
+
 Once real data is flowing:
 
 **Management Promises** `/promises` + section on `/companies/[slug]`
+
 - Quote, speaker, source type (concall / annual report / AGM / exchange filing), date, deadline, status, resolution
 - The most unique feature on the platform — no other tool tracks this
 
 **Policy Calendar** `/calendar`
+
 - Forward-looking: PLI disbursement deadlines, budget dates, scheme windows, upcoming tender floats
 - Month/week view, filterable by sector
 
 **Budget Tracker** `/budget`
+
 - Union Budget allocations by sector, year-over-year
 - Bar chart: which sectors got more/less than previous year
 
@@ -281,17 +307,17 @@ Once real data is flowing:
 
 ## 8. Data Source Map
 
-| Source | Signal type | Method | Priority | Cost |
-|---|---|---|---|---|
-| BSE bulk download | Order wins, results, capex guidance | Playwright / API | 🔴 First | Free |
-| PIB RSS | Reform notifications, scheme disbursals | RSS parser | 🔴 First | Free |
-| News RSS (ET, BS, Mint) | Sector news, tender coverage | RSS parser | 🔴 First | Free |
-| NITI Aayog | Policy documents, sector outlooks | Playwright + PDF | 🟡 Second | Free |
-| Ministry websites | Scheme notifications, press releases | Playwright | 🟡 Second | Free |
-| CPPP | Raw tender awards | Playwright (hard) | 🟡 Second | Free |
-| GeM portal | Procurement data | API (limited) | 🟢 Third | Free |
-| Annual reports / concalls | Management promises | PDF + Claude API | 🟡 Second | API cost |
-| X / Twitter | Real-time community signal | X API (expensive) | 🔵 Defer | ₹8k+/month |
+| Source                    | Signal type                             | Method            | Priority  | Cost       |
+| ------------------------- | --------------------------------------- | ----------------- | --------- | ---------- |
+| BSE bulk download         | Order wins, results, capex guidance     | Playwright / API  | 🔴 First  | Free       |
+| PIB RSS                   | Reform notifications, scheme disbursals | RSS parser        | 🔴 First  | Free       |
+| News RSS (ET, BS, Mint)   | Sector news, tender coverage            | RSS parser        | 🔴 First  | Free       |
+| NITI Aayog                | Policy documents, sector outlooks       | Playwright + PDF  | 🟡 Second | Free       |
+| Ministry websites         | Scheme notifications, press releases    | Playwright        | 🟡 Second | Free       |
+| CPPP                      | Raw tender awards                       | Playwright (hard) | 🟡 Second | Free       |
+| GeM portal                | Procurement data                        | API (limited)     | 🟢 Third  | Free       |
+| Annual reports / concalls | Management promises                     | PDF + Claude API  | 🟡 Second | API cost   |
+| X / Twitter               | Real-time community signal              | X API (expensive) | 🔵 Defer  | ₹8k+/month |
 
 **On X/Twitter:** The infra investing community on X is the best real-time signal source. But API access is prohibitively expensive for personal use. Practical approach for now: manually save high-signal tweets via a bookmarklet → auto-tagged into DB. Revisit programmatic access if budget allows later.
 
@@ -326,23 +352,4 @@ Once the data pipeline is live and real investment utility is proven:
 
 ---
 
-*Next session: Connect Supabase. Build the BSE filings scraper. First real data in the DB.*
-explained every time; hero shrunk to slim strip
-- **Seed data first** — build UI without DB, switch later. Allows fast iteration on design.
-- **Space Grotesk** — replaced Instrument Serif (too Times New Roman) for display/numbers
-
----
-
-## 9. The Bigger Picture
-
-Once the data is real and the product is launched, the natural extensions are:
-
-- **State-level tracker** — not just central govt, but state industrial policies (Gujarat, Maharashtra, Tamil Nadu are most active)
-- **Email digest** — "This week in India capex" — weekly summary of biggest tenders, reform moves, company order wins
-- **API** — let other tools (screeners, portfolio trackers) pull this data
-- **Mobile app** — eventually, once the web product is proven
-- **Monetisation** — freemium: basic data free, deep company intelligence + alerts behind a subscription (~₹499–999/month)
-
----
-
-*Go sleep. Come back and we'll connect the database.*
+_Next session: Connect Supabase. Build the BSE filings scraper. First real data in the DB._
