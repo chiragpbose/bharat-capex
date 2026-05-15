@@ -134,28 +134,56 @@ bharat-capex/
 
 - ✅ All 8 pages complete with full UI (homepage, reforms, tenders, companies, schemes + detail pages)
 - ✅ Design system (Space Grotesk + DM Sans, sector colours, status colours)
-- ✅ Prisma schema written and validated (all models, all relations)
-- ✅ Zod validation schemas (reform, tender, company, contribution)
+- ✅ Prisma schema written and validated (all models + RawAnnouncement)
 - ✅ `src/lib/db.ts` — Prisma singleton with pg driver adapter
-- ✅ `src/lib/data/reforms.ts` — data access layer started (DB not connected yet)
-- ✅ LinkedIn-style client dropdown filters (`src/components/reforms/reform-filters.tsx`)
+- ✅ `src/app/page.tsx` — homepage uses real DB queries (seed-data.ts deleted)
+- ✅ Data pipeline — 5 live sources + AI extraction:
+  - `sources/nse-filings.ts` — NSE corporate announcements (desc denylist + broad signal keywords)
+  - `sources/pib-rss.ts` — PIB press releases with correct English PRID lookup
+  - `sources/news-rss.ts` — ET Markets, ET Stocks, ET Industry, BS Markets, Mint RSS
+  - `sources/niti-scraper.ts` — NITI Aayog publications page (HTML scrape, no RSS)
+  - `sources/cppp-scraper.ts` — CPPP high-value tenders (HTTP + CAPTCHA alt-text bypass, no Playwright)
+  - `extract/extract-announcement.ts` — Claude Haiku extraction (isRelevant, type, valueCrore, summary)
+  - `run.ts` — orchestrates all 5 sources then extraction
 
 ### What's not built yet
 
-- ❌ Supabase not connected — .env credentials not yet filled in
-- ❌ Data pipeline (scrapers, AI extraction) — not started
-- ❌ Data access layer (`src/lib/data/*`) — only reforms.ts exists; all pages still use seed-data.ts
+- ❌ Anthropic API key — `.env` has placeholder, Claude extraction won't run until replaced
+- ❌ Data access layer (`src/lib/data/*`) — only reforms.ts exists; company/tender/scheme pages still use seed-data.ts
 - ❌ /promises page (Management Promises tracker)
 - ❌ /calendar page (Policy Calendar)
 - ❌ /budget page (Budget Tracker)
-- ❌ Search
-- ❌ src/app/api/ — no API routes exist yet
-- ❌ src/hooks/ — no client hooks exist yet
-- ❌ src/types/ — no shared types file yet
+- ❌ Annual reports / concall PDF pipeline (ManagementPromise source)
+- ❌ CPPP "Result of Tenders" (awarded contracts) — active tenders work, awards section needs investigation
 
 ### Currently working on
 
-→ Connecting Supabase. Next: BSE filings scraper → AI extraction pipeline.
+→ Pipeline built and type-checked. Next: set real Anthropic API key → run pipeline → verify extractions. Then connect remaining pages to DB (replace seed-data.ts imports).
+
+---
+
+## How to Work With Chirag
+
+Chirag is simultaneously learning four things through this project:
+
+1. **Software engineering** — backend patterns, databases, APIs, data pipelines (frontend is already comfortable)
+2. **Product thinking** — how to prioritise, what to build and what to defer, how to think about users
+3. **Stock markets** — how to read company fundamentals, what order books mean, how to build conviction
+4. **Policy & economy** — how government capex works, what PLI schemes actually do, how reforms translate to investment theses
+
+**Every time you write or change code, explain:**
+
+- **What** you're building (one sentence)
+- **Why** this approach over alternatives (the tradeoff)
+- **How it connects** to the broader product or investment thesis where relevant
+
+Keep explanations high-to-medium level. Not line-by-line ("this loop iterates...") but not just "done" either. Think: smart colleague briefing another smart colleague who is new to this specific domain.
+
+Examples of the right level:
+
+- "We're using a singleton pattern for the Prisma client because Next.js hot-reloads the server on every file change during development — without it, you'd exhaust your DB connection pool within minutes."
+- "BSE bulk announcements are the highest-ROI first data source because they're free, structured (CSV), updated daily, and cover every listed company automatically — unlike scraping individual company pages."
+- "This is a Server Component by default, meaning it runs on the server and sends plain HTML to the browser. We only switch to a Client Component when we need interactivity like the dropdown filters."
 
 ---
 
@@ -232,18 +260,18 @@ import { Space_Grotesk, DM_Sans, DM_Mono } from "next/font/google";
 
 Defined in `src/lib/seed-data.ts` — must stay consistent across seed data, DB seed script, and any hardcoded references.
 
-| Sector                    | Hex       |
-| ------------------------- | --------- |
-| Defence & Aerospace       | `#1d4ed8` |
-| Railways                  | `#7c3aed` |
-| Roads & Highways          | `#b45309` |
-| Energy & Power            | `#047857` |
-| Semiconductors            | `#be123c` |
-| Heavy Engineering         | `#0369a1` |
-| Shipping & Ports          | `#0f766e` |
-| Nuclear                   | `#6d28d9` |
-| Chemicals & Fertilizers   | `#b45309` |
-| Data Centres & AI Infra   | `#0c4a6e` |
+| Sector                  | Hex       |
+| ----------------------- | --------- |
+| Defence & Aerospace     | `#1d4ed8` |
+| Railways                | `#7c3aed` |
+| Roads & Highways        | `#b45309` |
+| Energy & Power          | `#047857` |
+| Semiconductors          | `#be123c` |
+| Heavy Engineering       | `#0369a1` |
+| Shipping & Ports        | `#0f766e` |
+| Nuclear                 | `#6d28d9` |
+| Chemicals & Fertilizers | `#b45309` |
+| Data Centres & AI Infra | `#0c4a6e` |
 
 ---
 

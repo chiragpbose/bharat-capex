@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { SECTORS, COMPANIES } from "@/lib/seed-data"
+import { getCompanies } from "@/lib/data/companies"
+import { getAllSectors } from "@/lib/data/sectors"
 
 function fmt(crore: number) {
   if (crore >= 100_000) return `₹${(crore / 100_000).toFixed(1)}L cr`
@@ -12,29 +13,16 @@ export const metadata = { title: "Companies" }
 export default async function CompaniesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sectorSlug?: string; q?: string }>
+  searchParams: Promise<{ sectorSlug?: string }>
 }) {
-  const { sectorSlug, q } = await searchParams
+  const { sectorSlug } = await searchParams
 
-  const activeSector = sectorSlug
-    ? SECTORS.find((s) => s.slug === sectorSlug)
-    : null
+  const [companies, sectors] = await Promise.all([
+    getCompanies(sectorSlug),
+    getAllSectors(),
+  ])
 
-  const filtered = COMPANIES.filter((co) => {
-    if (activeSector && !co.sectors.some((s) => {
-      const sec = SECTORS.find((x) => x.name === s)
-      return sec?.slug === sectorSlug
-    })) return false
-    if (q) {
-      const lower = q.toLowerCase()
-      return (
-        co.name.toLowerCase().includes(lower) ||
-        co.tickerNse.toLowerCase().includes(lower) ||
-        co.sectors.some((s) => s.toLowerCase().includes(lower))
-      )
-    }
-    return true
-  })
+  const activeSector = sectorSlug ? sectors.find((s) => s.slug === sectorSlug) : null
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-12 space-y-8">
@@ -47,8 +35,8 @@ export default async function CompaniesPage({
         </h1>
         <p className="text-muted-foreground text-sm">
           {activeSector
-            ? `${activeSector.companiesCount} companies · ${fmt(activeSector.govtOutlayCrore)} govt outlay · ${fmt(activeSector.orderBookCrore)} order book`
-            : `${COMPANIES.length} companies tracked across ${SECTORS.length} sectors`}
+            ? `${activeSector.companiesCount ?? companies.length} companies · ${fmt(activeSector.govtOutlayCrore ?? 0)} govt outlay · ${fmt(activeSector.orderBookCrore ?? 0)} order book`
+            : `${companies.length} companies tracked across ${sectors.length} sectors`}
         </p>
       </div>
 
@@ -64,7 +52,7 @@ export default async function CompaniesPage({
         >
           All sectors
         </Link>
-        {SECTORS.map((sector) => (
+        {sectors.map((sector) => (
           <Link
             key={sector.id}
             href={`/companies?sectorSlug=${sector.slug}`}
@@ -75,7 +63,7 @@ export default async function CompaniesPage({
             }`}
             style={
               activeSector?.id === sector.id
-                ? { backgroundColor: sector.color, borderColor: sector.color }
+                ? { backgroundColor: sector.color ?? undefined, borderColor: sector.color ?? undefined }
                 : {}
             }
           >
@@ -84,35 +72,25 @@ export default async function CompaniesPage({
         ))}
       </div>
 
-      {/* Results count + search hint */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          {filtered.length} {filtered.length === 1 ? "company" : "companies"}
-          {q ? ` matching "${q}"` : ""}
-        </p>
-        {q && (
-          <Link href={activeSector ? `/companies?sectorSlug=${sectorSlug}` : "/companies"}
-            className="text-xs text-blue-600 hover:underline">
-            Clear search
-          </Link>
-        )}
-      </div>
+      <p className="text-xs text-muted-foreground">
+        {companies.length} {companies.length === 1 ? "company" : "companies"}
+      </p>
 
       {/* Company grid */}
-      {filtered.length === 0 ? (
+      {companies.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           No companies match the current filters.
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((co) => {
-            const primarySector = SECTORS.find((x) => x.name === co.sectors[0])
+          {companies.map((co) => {
+            const primarySector = co.sectors[0]?.sector
             return (
               <Link
                 key={co.id}
                 href={`/companies/${co.slug}`}
                 className="group border rounded-xl p-4 hover:shadow-md transition-all bg-card overflow-hidden"
-                style={{ borderLeftColor: primarySector?.color, borderLeftWidth: "3px" }}
+                style={{ borderLeftColor: primarySector?.color ?? undefined, borderLeftWidth: "3px" }}
               >
                 {/* Header row */}
                 <div className="flex items-start justify-between mb-3">
@@ -122,14 +100,14 @@ export default async function CompaniesPage({
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded border tabular-nums ${
-                      co.revenueGrowthPct > 15
+                      (co.revenueGrowthPct ?? 0) > 15
                         ? "text-emerald-700 bg-emerald-50 border-emerald-200"
                         : "text-sky-700 bg-sky-50 border-sky-200"
                     }`}>
                       +{co.revenueGrowthPct}% rev
                     </span>
                     <span className="text-[10px] text-muted-foreground tabular-nums">
-                      {fmt(co.marketCapCrore)} mcap
+                      {fmt(co.marketCapCrore ?? 0)} mcap
                     </span>
                   </div>
                 </div>
@@ -137,15 +115,15 @@ export default async function CompaniesPage({
                 {/* Metrics grid */}
                 <div className="grid grid-cols-3 gap-2 mb-3 text-center">
                   <div className="bg-muted/50 rounded-lg py-1.5 px-1">
-                    <p className="text-xs font-bold tabular-nums">{fmt(co.revenueCrore)}</p>
+                    <p className="text-xs font-bold tabular-nums">{fmt(co.revenueCrore ?? 0)}</p>
                     <p className="text-[10px] text-muted-foreground leading-tight">Revenue</p>
                   </div>
                   <div className="bg-muted/50 rounded-lg py-1.5 px-1">
-                    <p className="text-xs font-bold tabular-nums">{fmt(co.orderBookCrore)}</p>
+                    <p className="text-xs font-bold tabular-nums">{fmt(co.orderBookCrore ?? 0)}</p>
                     <p className="text-[10px] text-muted-foreground leading-tight">Order Book</p>
                   </div>
                   <div className="bg-muted/50 rounded-lg py-1.5 px-1">
-                    <p className={`text-xs font-bold tabular-nums ${co.roce > 20 ? "text-emerald-700" : "text-foreground"}`}>
+                    <p className={`text-xs font-bold tabular-nums ${(co.roce ?? 0) > 20 ? "text-emerald-700" : "text-foreground"}`}>
                       {co.roce}%
                     </p>
                     <p className="text-[10px] text-muted-foreground leading-tight">ROCE</p>
@@ -154,9 +132,9 @@ export default async function CompaniesPage({
 
                 {/* Secondary metrics */}
                 <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
-                  <span>PAT <span className="font-medium text-foreground">{fmt(co.patCrore)}</span></span>
+                  <span>PAT <span className="font-medium text-foreground">{fmt(co.patCrore ?? 0)}</span></span>
                   <span>·</span>
-                  <span>D/E <span className={`font-medium ${co.debtEquityRatio < 0.5 ? "text-emerald-700" : co.debtEquityRatio > 1.5 ? "text-rose-700" : "text-foreground"}`}>{co.debtEquityRatio}x</span></span>
+                  <span>D/E <span className={`font-medium ${(co.debtEquityRatio ?? 0) < 0.5 ? "text-emerald-700" : (co.debtEquityRatio ?? 0) > 1.5 ? "text-rose-700" : "text-foreground"}`}>{co.debtEquityRatio}x</span></span>
                 </div>
 
                 {/* Capex plan */}
@@ -169,18 +147,15 @@ export default async function CompaniesPage({
 
                 {/* Sector tags */}
                 <div className="flex flex-wrap gap-1">
-                  {co.sectors.slice(0, 2).map((s) => {
-                    const sector = SECTORS.find((x) => x.name === s)
-                    return (
-                      <span
-                        key={s}
-                        className="text-xs px-2 py-0.5 rounded-full border font-medium"
-                        style={sector ? { color: sector.color, borderColor: `${sector.color}50`, backgroundColor: `${sector.color}0d` } : {}}
-                      >
-                        {s}
-                      </span>
-                    )
-                  })}
+                  {co.sectors.slice(0, 2).map(({ sector }) => (
+                    <span
+                      key={sector.id}
+                      className="text-xs px-2 py-0.5 rounded-full border font-medium"
+                      style={{ color: sector.color ?? undefined, borderColor: `${sector.color}50`, backgroundColor: `${sector.color}0d` }}
+                    >
+                      {sector.name}
+                    </span>
+                  ))}
                 </div>
               </Link>
             )
@@ -198,17 +173,17 @@ export default async function CompaniesPage({
           </div>
         </div>
         <div className="space-y-3">
-          {[...SECTORS].sort((a, b) => b.govtOutlayCrore - a.govtOutlayCrore).map((sector) => {
-            const maxGovt = Math.max(...SECTORS.map((s) => s.govtOutlayCrore))
-            const maxOB   = Math.max(...SECTORS.map((s) => s.orderBookCrore))
-            const govtPct = (sector.govtOutlayCrore / maxGovt) * 100
-            const obPct   = (sector.orderBookCrore   / maxOB)   * 100
+          {[...sectors].sort((a, b) => (b.govtOutlayCrore ?? 0) - (a.govtOutlayCrore ?? 0)).map((sector) => {
+            const maxGovt = Math.max(...sectors.map((s) => s.govtOutlayCrore ?? 0))
+            const maxOB   = Math.max(...sectors.map((s) => s.orderBookCrore ?? 0))
+            const govtPct = ((sector.govtOutlayCrore ?? 0) / maxGovt) * 100
+            const obPct   = ((sector.orderBookCrore ?? 0) / maxOB) * 100
             return (
               <Link key={sector.id} href={`/companies?sectorSlug=${sector.slug}`}
                 className="grid gap-y-1 group"
                 style={{ gridTemplateColumns: "10rem 1fr" }}>
                 <div className="flex items-center gap-2 row-span-2 self-center pr-3">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sector.color }} />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sector.color ?? undefined }} />
                   <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors truncate">
                     {sector.name}
                   </span>
@@ -217,13 +192,13 @@ export default async function CompaniesPage({
                   <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
                     <div className="h-full rounded-full bg-blue-400" style={{ width: `${govtPct}%` }} />
                   </div>
-                  <span className="text-[10px] tabular-nums text-blue-600 font-medium w-16 text-right shrink-0">{fmt(sector.govtOutlayCrore)}</span>
+                  <span className="text-[10px] tabular-nums text-blue-600 font-medium w-16 text-right shrink-0">{fmt(sector.govtOutlayCrore ?? 0)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
                     <div className="h-full rounded-full bg-emerald-400" style={{ width: `${obPct}%` }} />
                   </div>
-                  <span className="text-[10px] tabular-nums text-emerald-700 font-medium w-16 text-right shrink-0">{fmt(sector.orderBookCrore)}</span>
+                  <span className="text-[10px] tabular-nums text-emerald-700 font-medium w-16 text-right shrink-0">{fmt(sector.orderBookCrore ?? 0)}</span>
                 </div>
               </Link>
             )

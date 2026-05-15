@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Suspense } from "react"
-import { REFORMS, SECTORS } from "@/lib/seed-data"
+import { getReforms } from "@/lib/data/reforms"
+import { getAllSectors } from "@/lib/data/sectors"
 import { ReformFilters } from "@/components/reforms/reform-filters"
 import type { Metadata } from "next"
 
@@ -34,21 +35,22 @@ type SearchParams = Promise<{ status?: string; sector?: string }>
 export default async function ReformsPage({ searchParams }: { searchParams: SearchParams }) {
   const { status, sector } = await searchParams
 
-  const filtered = REFORMS.filter((r) => {
-    if (status && r.status !== status) return false
-    if (sector && r.sector.name !== sector) return false
-    return true
-  })
+  const [reforms, sectors] = await Promise.all([
+    getReforms(status, sector),
+    getAllSectors(),
+  ])
 
-  const totalOutlay = REFORMS.reduce((s, r) => s + (r.budgetOutlayCrore    ?? 0), 0)
-  const totalFdi    = REFORMS.reduce((s, r) => s + (r.fdiCommittedCrore    ?? 0), 0)
-  const totalOppty  = REFORMS.reduce((s, r) => s + (r.marketOpportunityCrore ?? 0), 0)
+  const allReforms = await getReforms()
+
+  const totalOutlay = allReforms.reduce((s, r) => s + (r.budgetOutlayCrore    ?? 0), 0)
+  const totalFdi    = allReforms.reduce((s, r) => s + (r.fdiCommittedCrore    ?? 0), 0)
+  const totalOppty  = allReforms.reduce((s, r) => s + (r.marketOpportunityCrore ?? 0), 0)
 
   const statusCounts = Object.fromEntries(
-    ALL_STATUSES.map((s) => [s, REFORMS.filter((r) => r.status === s).length])
+    ALL_STATUSES.map((s) => [s, allReforms.filter((r) => r.status === s).length])
   )
 
-  const uniqueSectors = Array.from(new Set(REFORMS.map((r) => r.sector.name)))
+  const uniqueSectors = Array.from(new Set(allReforms.map((r) => r.sector.name)))
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-12 space-y-8">
@@ -81,20 +83,19 @@ export default async function ReformsPage({ searchParams }: { searchParams: Sear
         <ReformFilters
           sectors={uniqueSectors}
           statusCounts={statusCounts}
-          filteredCount={filtered.length}
+          filteredCount={reforms.length}
         />
       </Suspense>
 
       {/* Reform cards */}
-      {filtered.length === 0 ? (
+      {reforms.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground border rounded-xl bg-card">
           No reforms match these filters.
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((reform) => {
-            const cfg = STATUS_CONFIG[reform.status]
-            const sec = SECTORS.find((s) => s.name === reform.sector.name)
+          {reforms.map((reform) => {
+            const cfg = STATUS_CONFIG[reform.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.PROPOSED
             return (
               <Link
                 key={reform.id}
@@ -150,7 +151,7 @@ export default async function ReformsPage({ searchParams }: { searchParams: Sear
                         )}
                         <span
                           className="text-xs font-medium px-2.5 py-1 rounded-full border"
-                          style={sec ? { color: sec.color, borderColor: `${sec.color}50`, backgroundColor: `${sec.color}0d` } : {}}
+                          style={{ color: reform.sector.color ?? undefined, borderColor: `${reform.sector.color}50`, backgroundColor: `${reform.sector.color}0d` }}
                         >
                           {reform.sector.name}
                         </span>

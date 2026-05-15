@@ -307,19 +307,29 @@ Once real data is flowing:
 
 ## 8. Data Source Map
 
-| Source                    | Signal type                             | Method            | Priority  | Cost       |
-| ------------------------- | --------------------------------------- | ----------------- | --------- | ---------- |
-| BSE bulk download         | Order wins, results, capex guidance     | Playwright / API  | 🔴 First  | Free       |
-| PIB RSS                   | Reform notifications, scheme disbursals | RSS parser        | 🔴 First  | Free       |
-| News RSS (ET, BS, Mint)   | Sector news, tender coverage            | RSS parser        | 🔴 First  | Free       |
-| NITI Aayog                | Policy documents, sector outlooks       | Playwright + PDF  | 🟡 Second | Free       |
-| Ministry websites         | Scheme notifications, press releases    | Playwright        | 🟡 Second | Free       |
-| CPPP                      | Raw tender awards                       | Playwright (hard) | 🟡 Second | Free       |
-| GeM portal                | Procurement data                        | API (limited)     | 🟢 Third  | Free       |
-| Annual reports / concalls | Management promises                     | PDF + Claude API  | 🟡 Second | API cost   |
-| X / Twitter               | Real-time community signal              | X API (expensive) | 🔵 Defer  | ₹8k+/month |
+| Source                    | Signal type                                          | Method                     | Status       | Cost       |
+| ------------------------- | ---------------------------------------------------- | -------------------------- | ------------ | ---------- |
+| NSE corporate filings     | Order wins, capex guidance, contract awards          | HTTP + cookie auth         | ✅ Live      | Free       |
+| PIB RSS                   | Reform notifications, scheme disbursals, policy news | RSS parser + HTML scrape   | ✅ Live      | Free       |
+| News RSS (ET, BS, Mint)   | Sector news, tender coverage, order win coverage     | RSS parser                 | ✅ Live      | Free       |
+| NITI Aayog                | Policy papers, sector roadmaps, strategy documents   | HTML scraper               | ✅ Live      | Free       |
+| CPPP high-value tenders   | Open tenders ≥₹1cr–100cr by all central govt bodies  | HTTP + CAPTCHA alt bypass  | ✅ Live      | Free       |
+| Annual reports / concalls | Management promises, order book guidance             | PDF + Claude API           | ❌ Not built | API cost   |
+| GeM portal                | Government marketplace procurement orders            | API (limited access)       | ❌ Deferred  | Free       |
+| X / Twitter               | Real-time community signal, promoter commentary      | X API                      | 🔵 Defer     | ₹8k+/month |
+| BSE bulk download         | Same as NSE but harder (Akamai CAPTCHA)              | Playwright (complex)       | ⏭ Replaced  | Free       |
 
-**On X/Twitter:** The infra investing community on X is the best real-time signal source. But API access is prohibitively expensive for personal use. Practical approach for now: manually save high-signal tweets via a bookmarklet → auto-tagged into DB. Revisit programmatic access if budget allows later.
+**NSE vs BSE:** NSE's corporate announcements API returns identical data (companies file with both exchanges) and requires only one cookie fetch. BSE's API is blocked by Akamai bot protection requiring Playwright + browser session. NSE is the complete replacement — no data loss.
+
+**CPPP "Result of Tenders" (awarded contracts):** The awards section has stricter server-side validation — returns no records without specific date/org parameters that aren't obvious from the form HTML. Needs investigation. For now, high-value active tenders give a 3–6 month pipeline view (which tender → which company is likely to win → order inflow ahead). That's actually the higher-value leading indicator.
+
+**Defence sector coverage:** All five sources cover defence. NSE filings catch order wins from HAL, BEL, Mazagon, Cochin Shipyard etc. PIB covers DAC (Defence Acquisition Council) approvals and indigenisation targets. CPPP includes defence ordnance/equipment tenders. Gap: large strategic platform acquisitions (fighter jets, warships, submarines) go through the Defence Acquisition Procedure (DAP), not standard tendering — but those surface in NSE filings within days of contract signing anyway.
+
+**GeM portal:** Deferred. GeM is a marketplace for standardised government purchases — IT hardware, vehicles, solar panels, furniture. It does NOT cover large infrastructure contracts (those go through CPPP/DAP). GeM IS relevant for EV bus procurement (Olectra, Tata Motors), solar panel volumes (Waaree, Vikram), and IT hardware (Dixon, Kaynes). However, listed companies that win GeM contracts also file NSE announcements, so the downstream signal is already captured. Revisit for aggregate sector trend data in Phase 2.
+
+**PIB coverage:** PIB (Press Information Bureau) is the central press release hub for ALL Indian ministries. Ministry-specific websites do not add materially — their announcements route through PIB. NITI Aayog is the exception (they publish independently).
+
+**On X/Twitter:** The infra investing community on X is the best real-time signal source. But API access is prohibitively expensive for personal use. Practical approach: manually save high-signal tweets via a bookmarklet → auto-tagged into DB. Revisit programmatic access if budget allows later.
 
 ---
 
@@ -340,7 +350,31 @@ Once real data is flowing:
 
 ---
 
-## 10. The Bigger Picture
+## 10. Key Policy Programmes to Track
+
+These are the structural policy initiatives whose downstream effects BharatCapex exists to map — from scheme → tender → company order book → stock thesis.
+
+| Programme | Outlay | Horizon | Beneficiary sectors |
+|---|---|---|---|
+| PLI Schemes (14 sectors) | ₹1.97L crore | 2021–2028 | Electronics, Semiconductors, Pharma, Solar, Defence, Textiles |
+| Gati Shakti (PM) | ₹100L crore pipeline | 2021–2025+ | Roads, Railways, Ports, Logistics, Energy |
+| National Infrastructure Pipeline | ₹111L crore | 2019–2025 | All infrastructure sectors |
+| Sagarmala | ₹5.48L crore | 2015–2035 | Ports, Coastal roads, Shipbuilding |
+| DPIIT PLI – Semiconductors | ₹76,000cr | 2021–2031 | Fabs, ATMP, chip design |
+| National Green Hydrogen Mission | ₹19,744cr | 2023–2030 | Electrolysers, Renewables, Green ammonia |
+| Nuclear Energy Expansion | ₹2L+ crore | 2024–2040 | Nuclear, Heavy engineering, EPC |
+| Defence indigenisation (iDEX, DAP) | Open-ended | Ongoing | HAL, BEL, Mazagon, L&T Defence |
+| Anusandhan National Research Foundation (ANRF) | ₹50,000cr total (₹36k private + ₹14k govt) | 2023–2028 | Deep tech R&D — semiconductors, AI, clean energy, advanced materials |
+| Research, Development and Innovation (RDI) Fund | ₹20,000cr | Budget 2025–26, 5-year rollout | Private sector R&D in frontier tech |
+
+**Note on ANRF / RDI Fund:**
+The Anusandhan National Research Foundation was established under the ANRF Act 2023. It consolidates India's research funding under one umbrella with ₹50,000cr over five years — the largest science funding commitment in India's history. The Research, Development and Innovation (RDI) Fund (Budget 2025–26, ₹20,000cr) sits alongside it, specifically aimed at private sector R&D with a "challenge" grant model.
+
+**Investment implication:** Companies that win ANRF/RDI grants are typically early-stage in deep tech (semiconductors, biotech, AI hardware). Listed beneficiaries are likely to include: TATA Electronics, Dixon Technologies, Kaynes Technology, HFCL, Apar Industries. These funds are signals of long-horizon thesis validation — track grant announcements for early conviction building.
+
+---
+
+## 11. The Bigger Picture
 
 Once the data pipeline is live and real investment utility is proven:
 
@@ -352,4 +386,4 @@ Once the data pipeline is live and real investment utility is proven:
 
 ---
 
-_Next session: Connect Supabase. Build the BSE filings scraper. First real data in the DB._
+_Next up: Connect real Anthropic API key → run pipeline → first real extractions. Then connect pages to DB (replace seed-data.ts). Then PDF pipeline for annual reports + Management Promises._

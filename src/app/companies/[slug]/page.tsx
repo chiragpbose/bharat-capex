@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { COMPANIES, SECTORS, TENDERS, REFORMS } from "@/lib/seed-data"
+import { getCompanyBySlug } from "@/lib/data/companies"
+import { getReforms } from "@/lib/data/reforms"
 
 function fmt(crore: number) {
   if (crore >= 100_000) return `₹${(crore / 100_000).toFixed(1)}L cr`
@@ -14,7 +15,7 @@ function fmtDate(date: Date) {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const co = COMPANIES.find((c) => c.slug === slug)
+  const co = await getCompanyBySlug(slug)
   return { title: co ? `${co.name} (${co.tickerNse})` : "Company Not Found" }
 }
 
@@ -24,16 +25,21 @@ export default async function CompanyDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const co = COMPANIES.find((c) => c.slug === slug)
+  const co = await getCompanyBySlug(slug)
   if (!co) notFound()
 
-  const primarySector = SECTORS.find((x) => x.name === co.sectors[0])
-  const relatedTenders = TENDERS.filter((t) => t.company.slug === co.slug)
-  const relatedReforms = REFORMS.filter((r) =>
-    co.sectors.some((s) => s === r.sector.name)
-  )
+  const primarySector = co.sectors[0]?.sector
+  const sectorNames   = co.sectors.map((cs) => cs.sector.name)
+  const tenders       = co.tenders
+  const totalTenderValue = tenders.reduce((sum, t) => sum + (t.valueCrore ?? 0), 0)
 
-  const totalTenderValue = relatedTenders.reduce((sum, t) => sum + t.valueCrore, 0)
+  // Reforms relevant to any of this company's sectors
+  const allReforms = await Promise.all(
+    sectorNames.map((name) => getReforms(undefined, name))
+  )
+  const relatedReforms = Array.from(
+    new Map(allReforms.flat().map((r) => [r.id, r])).values()
+  )
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-12 space-y-10">
@@ -47,19 +53,21 @@ export default async function CompanyDetailPage({
 
       {/* Hero */}
       <div className="relative border rounded-2xl p-8 bg-card overflow-hidden"
-        style={{ borderLeftColor: primarySector?.color, borderLeftWidth: "4px" }}>
+        style={{ borderLeftColor: primarySector?.color ?? undefined, borderLeftWidth: "4px" }}>
         <div className="absolute top-0 right-0 w-80 h-80 rounded-full blur-3xl opacity-10 pointer-events-none"
-          style={{ backgroundColor: primarySector?.color }} />
+          style={{ backgroundColor: primarySector?.color ?? undefined }} />
 
         <div className="relative flex flex-col sm:flex-row sm:items-start justify-between gap-6">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span
-                className="text-xs font-semibold px-2.5 py-1 rounded-full border"
-                style={primarySector ? { color: primarySector.color, borderColor: `${primarySector.color}50`, backgroundColor: `${primarySector.color}0d` } : {}}
-              >
-                {co.sectors[0]}
-              </span>
+              {primarySector && (
+                <span
+                  className="text-xs font-semibold px-2.5 py-1 rounded-full border"
+                  style={{ color: primarySector.color ?? undefined, borderColor: `${primarySector.color}50`, backgroundColor: `${primarySector.color}0d` }}
+                >
+                  {primarySector.name}
+                </span>
+              )}
               <span className="text-xs text-muted-foreground font-medium">NSE: {co.tickerNse}</span>
             </div>
             <h1 className="font-display text-4xl tracking-tight mb-2">{co.name}</h1>
@@ -68,11 +76,11 @@ export default async function CompanyDetailPage({
 
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="text-right">
-              <p className="font-display text-2xl tracking-tight">{fmt(co.marketCapCrore)}</p>
+              <p className="font-display text-2xl tracking-tight">{fmt(co.marketCapCrore ?? 0)}</p>
               <p className="text-xs text-muted-foreground">Market Cap</p>
             </div>
             <span className={`text-sm font-bold px-3 py-1 rounded-lg border tabular-nums ${
-              co.revenueGrowthPct > 15
+              (co.revenueGrowthPct ?? 0) > 15
                 ? "text-emerald-700 bg-emerald-50 border-emerald-200"
                 : "text-sky-700 bg-sky-50 border-sky-200"
             }`}>
@@ -85,10 +93,10 @@ export default async function CompanyDetailPage({
       {/* Key metrics */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-xl overflow-hidden bg-border border">
         {[
-          { label: "Revenue",       value: fmt(co.revenueCrore),      sub: "FY25 (est.)",          color: "text-blue-600" },
-          { label: "Order Book",    value: fmt(co.orderBookCrore),    sub: "executable backlog",    color: "text-violet-600" },
-          { label: "PAT",           value: fmt(co.patCrore),          sub: "net profit",            color: "text-emerald-600" },
-          { label: "ROCE",          value: `${co.roce}%`,             sub: "return on cap. employed", color: co.roce > 20 ? "text-emerald-600" : "text-sky-600" },
+          { label: "Revenue",    value: fmt(co.revenueCrore ?? 0),   sub: "FY25 (est.)",            color: "text-blue-600" },
+          { label: "Order Book", value: fmt(co.orderBookCrore ?? 0), sub: "executable backlog",     color: "text-violet-600" },
+          { label: "PAT",        value: fmt(co.patCrore ?? 0),       sub: "net profit",             color: "text-emerald-600" },
+          { label: "ROCE",       value: `${co.roce}%`,               sub: "return on cap. employed", color: (co.roce ?? 0) > 20 ? "text-emerald-600" : "text-sky-600" },
         ].map(({ label, value, sub, color }) => (
           <div key={label} className="bg-card px-5 py-4">
             <p className={`font-display text-2xl tracking-tight ${color}`}>{value}</p>
@@ -107,23 +115,23 @@ export default async function CompanyDetailPage({
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Debt / Equity</span>
               <span className={`text-sm font-bold tabular-nums ${
-                co.debtEquityRatio < 0.5 ? "text-emerald-700"
-                : co.debtEquityRatio > 1.5 ? "text-rose-700"
+                (co.debtEquityRatio ?? 0) < 0.5 ? "text-emerald-700"
+                : (co.debtEquityRatio ?? 0) > 1.5 ? "text-rose-700"
                 : "text-foreground"
               }`}>{co.debtEquityRatio}x</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Market Cap</span>
-              <span className="text-sm font-bold tabular-nums">{fmt(co.marketCapCrore)}</span>
+              <span className="text-sm font-bold tabular-nums">{fmt(co.marketCapCrore ?? 0)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Revenue</span>
-              <span className="text-sm font-bold tabular-nums">{fmt(co.revenueCrore)}</span>
+              <span className="text-sm font-bold tabular-nums">{fmt(co.revenueCrore ?? 0)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">P/Sales</span>
               <span className="text-sm font-bold tabular-nums">
-                {(co.marketCapCrore / co.revenueCrore).toFixed(1)}x
+                {((co.marketCapCrore ?? 0) / (co.revenueCrore ?? 1)).toFixed(1)}x
               </span>
             </div>
           </div>
@@ -134,19 +142,19 @@ export default async function CompanyDetailPage({
           <div className="space-y-2.5">
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Revenue growth</span>
-              <span className={`text-sm font-bold tabular-nums ${co.revenueGrowthPct > 15 ? "text-emerald-700" : "text-sky-700"}`}>
+              <span className={`text-sm font-bold tabular-nums ${(co.revenueGrowthPct ?? 0) > 15 ? "text-emerald-700" : "text-sky-700"}`}>
                 +{co.revenueGrowthPct}%
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Order book</span>
-              <span className="text-sm font-bold tabular-nums">{fmt(co.orderBookCrore)}</span>
+              <span className="text-sm font-bold tabular-nums">{fmt(co.orderBookCrore ?? 0)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">Tenders won</span>
-              <span className="text-sm font-bold tabular-nums">{relatedTenders.length}</span>
+              <span className="text-sm font-bold tabular-nums">{tenders.length}</span>
             </div>
-            {relatedTenders.length > 0 && (
+            {tenders.length > 0 && (
               <div className="flex justify-between items-center">
                 <span className="text-xs text-muted-foreground">Total value</span>
                 <span className="text-sm font-bold tabular-nums text-emerald-700">{fmt(totalTenderValue)}</span>
@@ -164,23 +172,19 @@ export default async function CompanyDetailPage({
                 <p className="text-xs text-muted-foreground mt-0.5">planned investment</p>
               </div>
               <div className="h-px bg-border" />
-              <p className="text-xs text-muted-foreground italic leading-relaxed">
-                {co.recentWin}
-              </p>
+              <p className="text-xs text-muted-foreground italic leading-relaxed">{co.recentWin}</p>
             </div>
           ) : (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">No disclosed capex plan</p>
-              <p className="text-xs text-muted-foreground italic leading-relaxed mt-2">
-                {co.recentWin}
-              </p>
+              <p className="text-xs text-muted-foreground italic leading-relaxed mt-2">{co.recentWin}</p>
             </div>
           )}
         </div>
       </section>
 
       {/* Tenders won */}
-      {relatedTenders.length > 0 && (
+      {tenders.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest flex items-center gap-2">
@@ -190,32 +194,43 @@ export default async function CompanyDetailPage({
             <span className="text-xs text-muted-foreground">{fmt(totalTenderValue)} total</span>
           </div>
           <div className="divide-y border rounded-xl overflow-hidden bg-card">
-            {relatedTenders.map((tender) => (
-              <div key={tender.id} className="px-4 py-4 hover:bg-muted/30 transition-colors">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium leading-snug">{tender.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{tender.awardingBody}</p>
+            {tenders.map((tender) => {
+              const schemeName = tender.schemes[0]?.scheme.name
+              return (
+                <div key={tender.id} className="px-4 py-4 hover:bg-muted/30 transition-colors">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium leading-snug">{tender.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{tender.awardingBody}</p>
+                    </div>
+                    <span className="text-xs font-bold tabular-nums whitespace-nowrap text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 shrink-0">
+                      {fmt(tender.valueCrore ?? 0)}
+                    </span>
                   </div>
-                  <span className="text-xs font-bold tabular-nums whitespace-nowrap text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 shrink-0">
-                    {fmt(tender.valueCrore)}
-                  </span>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap text-xs text-muted-foreground">
+                    <span className="font-medium" style={{ color: tender.sector.color ?? undefined }}>{tender.sector.name}</span>
+                    {schemeName && (
+                      <>
+                        <span>·</span>
+                        <span className="text-blue-600">{schemeName}</span>
+                      </>
+                    )}
+                    {tender.awardedAt && (
+                      <>
+                        <span>·</span>
+                        <span>Awarded {fmtDate(tender.awardedAt)}</span>
+                      </>
+                    )}
+                    {tender.completionMonths && (
+                      <>
+                        <span>·</span>
+                        <span>{tender.completionMonths}mo delivery</span>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 mt-2 flex-wrap text-xs text-muted-foreground">
-                  <span className="font-medium" style={{ color: tender.sector.color }}>{tender.sector.name}</span>
-                  {tender.scheme && (
-                    <>
-                      <span>·</span>
-                      <span className="text-blue-600">{tender.scheme}</span>
-                    </>
-                  )}
-                  <span>·</span>
-                  <span>Awarded {fmtDate(tender.awardedAt)}</span>
-                  <span>·</span>
-                  <span>{tender.completionMonths}mo delivery</span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       )}
@@ -223,12 +238,10 @@ export default async function CompanyDetailPage({
       {/* Related Reforms */}
       {relatedReforms.length > 0 && (
         <section>
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-              Relevant Policy Reforms
-            </h2>
-          </div>
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest flex items-center gap-2 mb-4">
+            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
+            Relevant Policy Reforms
+          </h2>
           <div className="grid sm:grid-cols-2 gap-3">
             {relatedReforms.map((reform) => (
               <Link key={reform.id} href={`/reforms/${reform.slug}`}
@@ -268,22 +281,19 @@ export default async function CompanyDetailPage({
       <section className="border rounded-xl p-5 bg-card">
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-4">Sector Exposure</h2>
         <div className="flex flex-wrap gap-2">
-          {co.sectors.map((s) => {
-            const sector = SECTORS.find((x) => x.name === s)
-            return (
-              <Link
-                key={s}
-                href={`/companies?sectorSlug=${sector?.slug}`}
-                className="flex flex-col gap-0.5 px-3 py-2 rounded-xl border hover:shadow-sm transition-all"
-                style={sector ? { borderColor: `${sector.color}40`, backgroundColor: `${sector.color}0a` } : {}}
-              >
-                <span className="text-xs font-semibold" style={{ color: sector?.color }}>{s}</span>
-                {sector && (
-                  <span className="text-[10px] text-muted-foreground">{fmt(sector.govtOutlayCrore)} govt · {fmt(sector.orderBookCrore)} OB</span>
-                )}
-              </Link>
-            )
-          })}
+          {co.sectors.map(({ sector }) => (
+            <Link
+              key={sector.id}
+              href={`/companies?sectorSlug=${sector.slug}`}
+              className="flex flex-col gap-0.5 px-3 py-2 rounded-xl border hover:shadow-sm transition-all"
+              style={{ borderColor: `${sector.color}40`, backgroundColor: `${sector.color}0a` }}
+            >
+              <span className="text-xs font-semibold" style={{ color: sector.color ?? undefined }}>{sector.name}</span>
+              <span className="text-[10px] text-muted-foreground">
+                {fmt(sector.govtOutlayCrore ?? 0)} govt · {fmt(sector.orderBookCrore ?? 0)} OB
+              </span>
+            </Link>
+          ))}
         </div>
       </section>
 

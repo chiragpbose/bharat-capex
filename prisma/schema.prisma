@@ -82,6 +82,7 @@ model Sector {
   color            String?
   govtOutlayCrore  Float?  // budget allocation + scheme outlay
   orderBookCrore   Float?  // aggregate order book of listed companies
+  companiesCount   Int?    // total NSE/BSE-listed companies in this sector
 
   createdAt DateTime @default(now())
 
@@ -123,13 +124,14 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sectors      CompanySector[]
-  schemes      CompanyScheme[]
-  tenders      Tender[]
-  fundamentals CompanyFundamentals[]
-  promises     ManagementPromise[]
-  news         NewsCompany[]
-  contributions UserContribution[]
+  sectors          CompanySector[]
+  schemes          CompanyScheme[]
+  tenders          Tender[]
+  fundamentals     CompanyFundamentals[]
+  promises         ManagementPromise[]
+  news             NewsCompany[]
+  contributions    UserContribution[]
+  rawAnnouncements RawAnnouncement[]
 
   @@index([tickerNse])
   @@index([slug])
@@ -167,9 +169,10 @@ model Scheme {
   approvedProjects     Int?
   jobsTargeted         Int?
 
-  schemeStartYear Int?
-  schemeEndYear   Int?
-  sourceUrl       String?
+  schemeStartYear  Int?
+  schemeEndYear    Int?
+  sourceUrl        String?
+  keyBeneficiaries String[]  // editorial: all key players incl. unlisted companies
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -363,6 +366,32 @@ model NewsCompany {
   company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@id([newsItemId, companyId])
+}
+
+// ─────────────────────────────────────────────
+// PIPELINE: RAW ANNOUNCEMENTS
+// Stores fetched-but-unprocessed source data before Claude extraction
+// ─────────────────────────────────────────────
+
+model RawAnnouncement {
+  id            String    @id @default(cuid())
+  source        String    // "BSE" | "PIB" | "NEWS_ET" | etc.
+  externalId    String    // BSE: NEWSID, PIB: guid
+  companyId     String?
+  title         String
+  body          String?
+  attachmentUrl String?
+  publishedAt   DateTime
+  processedAt   DateTime?
+  extractedData Json?
+  createdAt     DateTime  @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id])
+
+  @@unique([source, externalId])
+  @@index([processedAt])
+  @@index([companyId])
+  @@index([publishedAt])
 }
 
 // ─────────────────────────────────────────────

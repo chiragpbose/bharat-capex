@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { REFORMS, SECTORS, COMPANIES } from "@/lib/seed-data"
+import { getReformBySlug, getCompaniesBySectorId, getRelatedReforms } from "@/lib/data/reforms"
 
 function fmt(crore: number) {
   if (crore >= 100_000) return `₹${(crore / 100_000).toFixed(1)}L cr`
@@ -21,7 +21,6 @@ const STATUS_STYLES = {
   REVERSED:    { badge: "bg-red-50 text-red-700 border-red-200",             dot: "bg-red-500",     line: "border-red-200"     },
 } as const
 
-// The reform journey stages — which ones are "reached" depends on status
 const STAGES = [
   { key: "PROPOSED",    label: "Proposed"    },
   { key: "NOTIFIED",    label: "Notified"    },
@@ -33,26 +32,23 @@ const STAGE_ORDER = ["PROPOSED", "NOTIFIED", "IMPLEMENTED", "OPERATIONAL"]
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const reform = REFORMS.find((r) => r.slug === slug)
+  const reform = await getReformBySlug(slug)
   return { title: reform?.title ?? "Reform Not Found" }
 }
 
 export default async function ReformDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const reform = REFORMS.find((r) => r.slug === slug)
+  const reform = await getReformBySlug(slug)
   if (!reform) notFound()
 
-  const styles     = STATUS_STYLES[reform.status]
-  const sectorData = SECTORS.find((s) => s.name === reform.sector.name)
+  const [beneficiaries, related] = await Promise.all([
+    getCompaniesBySectorId(reform.sectorId),
+    getRelatedReforms(reform.sectorId, reform.slug),
+  ])
+
+  const styles = STATUS_STYLES[reform.status as keyof typeof STATUS_STYLES] ?? STATUS_STYLES.PROPOSED
+  const sectorData = reform.sector
   const currentStageIndex = STAGE_ORDER.indexOf(reform.status)
-
-  // Companies in the same sector — potential beneficiaries
-  const beneficiaries = COMPANIES.filter((co) =>
-    co.sectors.some((s) => s === reform.sector.name)
-  )
-
-  // Other reforms in same sector
-  const related = REFORMS.filter((r) => r.id !== reform.id && r.sector.name === reform.sector.name)
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-12 space-y-10">
@@ -61,16 +57,16 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
       <nav className="flex items-center gap-2 text-xs text-muted-foreground">
         <Link href="/reforms" className="hover:text-foreground transition-colors">Reforms</Link>
         <span>›</span>
-        <span className="font-medium" style={{ color: sectorData?.color }}>{reform.sector.name}</span>
+        <span className="font-medium" style={{ color: sectorData.color ?? undefined }}>{sectorData.name}</span>
         <span>›</span>
         <span className="text-foreground line-clamp-1 max-w-xs">{reform.title}</span>
       </nav>
 
       {/* Hero */}
       <div className="relative border rounded-2xl p-8 bg-card overflow-hidden"
-        style={{ borderLeftColor: sectorData?.color, borderLeftWidth: "4px" }}>
+        style={{ borderLeftColor: sectorData.color ?? undefined, borderLeftWidth: "4px" }}>
         <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-10 pointer-events-none"
-          style={{ backgroundColor: sectorData?.color }} />
+          style={{ backgroundColor: sectorData.color ?? undefined }} />
         <div className="relative">
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <span className={`text-xs font-semibold px-2.5 py-1 rounded border ${styles.badge}`}>
@@ -78,9 +74,9 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
             </span>
             <span
               className="text-xs font-medium px-2.5 py-1 rounded-full border"
-              style={sectorData ? { color: sectorData.color, borderColor: `${sectorData.color}50`, backgroundColor: `${sectorData.color}0d` } : {}}
+              style={{ color: sectorData.color ?? undefined, borderColor: `${sectorData.color}50`, backgroundColor: `${sectorData.color}0d` }}
             >
-              {reform.sector.name}
+              {sectorData.name}
             </span>
             {reform.scheme && (
               <span className="text-xs text-muted-foreground border rounded px-2.5 py-1">
@@ -94,7 +90,7 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
 
           {reform.note && (
             <p className="mt-3 text-sm italic text-muted-foreground border-l-2 pl-3"
-              style={{ borderColor: sectorData?.color }}>
+              style={{ borderColor: sectorData.color ?? undefined }}>
               {reform.note}
             </p>
           )}
@@ -104,9 +100,9 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
       {/* Money metrics */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-px rounded-xl overflow-hidden bg-border border">
         {[
-          reform.budgetOutlayCrore    && { label: "Budget Outlay",       value: fmt(reform.budgetOutlayCrore),         sub: "direct govt allocation",    color: "text-violet-600" },
-          reform.fdiCommittedCrore    && { label: "FDI Committed",       value: fmt(reform.fdiCommittedCrore),         sub: "post-reform commitments",   color: "text-emerald-600" },
-          reform.marketOpportunityCrore && { label: "Market Opportunity", value: fmt(reform.marketOpportunityCrore),   sub: "addressable market size",   color: "text-blue-600" },
+          reform.budgetOutlayCrore      && { label: "Budget Outlay",      value: fmt(reform.budgetOutlayCrore),      sub: "direct govt allocation",   color: "text-violet-600" },
+          reform.fdiCommittedCrore      && { label: "FDI Committed",      value: fmt(reform.fdiCommittedCrore),      sub: "post-reform commitments",  color: "text-emerald-600" },
+          reform.marketOpportunityCrore && { label: "Market Opportunity", value: fmt(reform.marketOpportunityCrore), sub: "addressable market size",  color: "text-blue-600" },
         ].filter(Boolean).map((stat) => {
           const s = stat as { label: string; value: string; sub: string; color: string }
           return (
@@ -124,9 +120,9 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
         <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-6">Reform Journey</h2>
         <div className="flex items-start gap-0">
           {STAGES.map((stage, i) => {
-            const reached  = STAGE_ORDER.indexOf(stage.key) <= currentStageIndex
+            const reached   = STAGE_ORDER.indexOf(stage.key) <= currentStageIndex
             const isCurrent = stage.key === reform.status || (stage.key === "IMPLEMENTED" && reform.status === "OPERATIONAL")
-            const isLast   = i === STAGES.length - 1
+            const isLast    = i === STAGES.length - 1
             return (
               <div key={stage.key} className="flex flex-1 flex-col items-center">
                 <div className="flex items-center w-full">
@@ -136,8 +132,8 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
                     {reached && <span className="w-2 h-2 rounded-full bg-white" />}
                   </div>
                   {!isLast && (
-                    <div className={`flex-1 h-0.5 transition-colors ${reached ? styles.dot.replace("bg-", "bg-") : "bg-border"}`}
-                      style={reached ? { backgroundColor: sectorData?.color } : {}} />
+                    <div className="flex-1 h-0.5 transition-colors"
+                      style={reached ? { backgroundColor: sectorData.color ?? undefined } : { backgroundColor: "var(--border)" }} />
                   )}
                 </div>
                 <p className={`text-[10px] font-medium mt-2 text-center ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}>
@@ -159,7 +155,7 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
           {[
             { label: "Status",     value: reform.status.charAt(0) + reform.status.slice(1).toLowerCase() },
             { label: "Difficulty", value: reform.difficulty === "HIGH" ? "Complex reform" : reform.difficulty === "MEDIUM" ? "Moderate reform" : "Straightforward" },
-            { label: "Sector",     value: reform.sector.name },
+            { label: "Sector",     value: sectorData.name },
             reform.scheme ? { label: "Scheme",   value: reform.scheme.name } : null,
             reform.notifiedAt ? { label: "Notified", value: fmtDate(reform.notifiedAt) } : null,
             reform.sourceUrl  ? { label: "Source",   value: "Official notification ↗" } : null,
@@ -182,31 +178,29 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
         </div>
 
         {/* Sector context */}
-        {sectorData && (
-          <div className="border rounded-xl p-5 bg-card space-y-3">
-            <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Sector Context</h2>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: sectorData.color }} />
-              <span className="font-semibold text-sm" style={{ color: sectorData.color }}>{sectorData.name}</span>
-            </div>
-            {[
-              { label: "Govt outlay",  value: fmt(sectorData.govtOutlayCrore),  color: "text-violet-700" },
-              { label: "Order book",   value: fmt(sectorData.orderBookCrore),    color: "text-emerald-700" },
-              { label: "Listed cos",   value: `${sectorData.companiesCount}`,    color: "text-foreground" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{label}</span>
-                <span className={`text-xs font-bold tabular-nums ${color}`}>{value}</span>
-              </div>
-            ))}
-            <div className="pt-1">
-              <Link href={`/companies?sectorSlug=${sectorData.slug}`}
-                className="text-xs text-blue-600 hover:underline underline-offset-2">
-                Browse {sectorData.name} companies →
-              </Link>
-            </div>
+        <div className="border rounded-xl p-5 bg-card space-y-3">
+          <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-widest">Sector Context</h2>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: sectorData.color ?? undefined }} />
+            <span className="font-semibold text-sm" style={{ color: sectorData.color ?? undefined }}>{sectorData.name}</span>
           </div>
-        )}
+          {[
+            { label: "Govt outlay", value: fmt(sectorData.govtOutlayCrore ?? 0), color: "text-violet-700" },
+            { label: "Order book",  value: fmt(sectorData.orderBookCrore ?? 0),  color: "text-emerald-700" },
+            { label: "Listed cos",  value: `${sectorData.companiesCount ?? "—"}`, color: "text-foreground" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{label}</span>
+              <span className={`text-xs font-bold tabular-nums ${color}`}>{value}</span>
+            </div>
+          ))}
+          <div className="pt-1">
+            <Link href={`/companies?sectorSlug=${sectorData.slug}`}
+              className="text-xs text-blue-600 hover:underline underline-offset-2">
+              Browse {sectorData.name} companies →
+            </Link>
+          </div>
+        </div>
       </section>
 
       {/* Beneficiary companies */}
@@ -217,29 +211,29 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {beneficiaries.map((co) => {
-              const primarySector = SECTORS.find((s) => s.name === co.sectors[0])
+              const ps = co.sectors[0]?.sector
               return (
                 <Link key={co.id} href={`/companies/${co.slug}`}
                   className="group border rounded-xl p-4 bg-card hover:shadow-sm transition-all"
-                  style={{ borderLeftColor: primarySector?.color, borderLeftWidth: "3px" }}>
+                  style={{ borderLeftColor: ps?.color ?? undefined, borderLeftWidth: "3px" }}>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="font-semibold text-sm group-hover:text-blue-600 transition-colors">{co.name}</p>
                       <p className="text-xs text-muted-foreground">{co.tickerNse} · NSE</p>
                     </div>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded border tabular-nums ${
-                      co.revenueGrowthPct > 15 ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-sky-700 bg-sky-50 border-sky-200"
+                      (co.revenueGrowthPct ?? 0) > 15 ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-sky-700 bg-sky-50 border-sky-200"
                     }`}>
                       +{co.revenueGrowthPct}%
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5 text-center">
                     <div className="bg-muted/50 rounded-lg py-1.5">
-                      <p className="text-xs font-bold tabular-nums">{fmt(co.orderBookCrore)}</p>
+                      <p className="text-xs font-bold tabular-nums">{fmt(co.orderBookCrore ?? 0)}</p>
                       <p className="text-[10px] text-muted-foreground">Order Book</p>
                     </div>
                     <div className="bg-muted/50 rounded-lg py-1.5">
-                      <p className={`text-xs font-bold tabular-nums ${co.roce > 20 ? "text-emerald-700" : ""}`}>{co.roce}%</p>
+                      <p className={`text-xs font-bold tabular-nums ${(co.roce ?? 0) > 20 ? "text-emerald-700" : ""}`}>{co.roce}%</p>
                       <p className="text-[10px] text-muted-foreground">ROCE</p>
                     </div>
                   </div>
@@ -258,7 +252,7 @@ export default async function ReformDetailPage({ params }: { params: Promise<{ s
           </h2>
           <div className="divide-y border rounded-xl overflow-hidden bg-card">
             {related.map((r) => {
-              const s = STATUS_STYLES[r.status]
+              const s = STATUS_STYLES[r.status as keyof typeof STATUS_STYLES] ?? STATUS_STYLES.PROPOSED
               return (
                 <Link key={r.id} href={`/reforms/${r.slug}`}
                   className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors group">
