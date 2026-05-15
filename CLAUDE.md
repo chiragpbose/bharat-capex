@@ -46,7 +46,7 @@ Read every line of this before writing any code.
   ```
 - Constructor requires driver adapter:
   ```ts
-  import { Pool } from "@neondatabase/serverless"; // or pg
+  import { Pool } from "pg";
   import { PrismaPg } from "@prisma/adapter-pg";
   new PrismaClient({ adapter: new PrismaPg(pool) });
   ```
@@ -91,16 +91,16 @@ Read every line of this before writing any code.
 ```
 bharat-capex/
 ├── prisma/
-│   ├── schema.prisma          Full DB schema — all models + relations
+│   ├── schema.prisma          Full DB schema — 13 models + RawAnnouncement
 │   └── prisma.config.ts       Prisma 7 config (required)
 │
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx           Homepage — feed + sector bars + company movers
-│   │   ├── reforms/           Listing + [slug] detail
-│   │   ├── tenders/           Listing only (detail page not yet built)
-│   │   ├── companies/         Listing + [slug] detail
-│   │   └── schemes/           Listing + [slug] detail
+│   │   ├── page.tsx           Homepage — real DB queries ✅
+│   │   ├── reforms/           Listing + [slug] detail — seed-data (to replace)
+│   │   ├── tenders/           Listing only — seed-data (to replace)
+│   │   ├── companies/         Listing + [slug] detail — seed-data (to replace)
+│   │   └── schemes/           Listing + [slug] detail — seed-data (to replace)
 │   │
 │   ├── components/
 │   │   ├── ui/                shadcn/ui components (badge, button, card, select...)
@@ -109,19 +109,27 @@ bharat-capex/
 │   │
 │   ├── lib/
 │   │   ├── db.ts              Prisma singleton — use this everywhere
-│   │   ├── seed-data.ts       ⚠️ TEMPORARY — all pages use this, to be replaced
 │   │   ├── utils.ts           cn() helper
-│   │   ├── validations/       Zod schemas (reform, tender, company, contribution)
-│   │   ├── data/              Data access layer (only reforms.ts exists so far)
-│   │   └── pipeline/          ← TO BE BUILT (scrapers + AI extraction)
-│   │       ├── sources/       BSE filings, PIB RSS, news RSS, CPPP scraper
-│   │       └── extract/       Claude API extraction layer
+│   │   ├── validations/       Zod schemas (reform, tender, company)
+│   │   ├── data/reforms.ts    Data access layer (reforms only — rest to build)
+│   │   └── pipeline/
+│   │       ├── run.ts         Orchestrator — npm run pipeline:run
+│   │       ├── check-data.ts  Diagnostic — inspect what's stored
+│   │       ├── sources/
+│   │       │   ├── nse-filings.ts    NSE corporate announcements ✅
+│   │       │   ├── pib-rss.ts        PIB press releases ✅
+│   │       │   ├── news-rss.ts       ET/BS/Mint RSS ✅
+│   │       │   ├── niti-scraper.ts   NITI Aayog publications ✅
+│   │       │   ├── cppp-scraper.ts   CPPP high-value tenders ✅
+│   │       │   └── bse-filings.ts    Stub — replaced by NSE
+│   │       └── extract/
+│   │           └── extract-announcement.ts  Claude Haiku extraction ✅
 │   │
 │   └── generated/prisma/      Auto-generated Prisma client — never edit manually
 │
 ├── CLAUDE.md                  ← You are here
 ├── VISION.md                  Full product vision and roadmap
-└── .env.example               Copy to .env — fill Supabase credentials
+└── .env.example               Copy to .env — fill Supabase + Anthropic credentials
 ```
 
 ---
@@ -197,49 +205,42 @@ Examples of the right level:
 
 4. **No monetisation features.** No subscription walls, payment flows, or premium tiers. Not the current goal.
 
-5. **seed-data.ts is temporary.** Never add more hardcoded data to it. The goal is to replace it with real DB queries, not grow it.
+5. **seed-data.ts is being phased out.** Never add to it. Homepage already uses real DB queries. The remaining pages (companies, tenders, schemes, reforms) still import from it — replace each with a real `src/lib/data/*.ts` query as you go.
 
 6. **All pages are Server Components by default.** Only reach for `"use client"` when strictly necessary.
 
 ---
 
-## Data Pipeline Architecture (to be built)
+## Data Pipeline Architecture
 
 ```
-Sources → Scrapers/Fetchers → Raw Storage (Supabase) → AI Extraction (Claude API) → DB
+Sources → Scrapers → RawAnnouncement table → Claude extraction → extractedData JSON → Frontend
 ```
 
-### Source priority order
+### Live sources (all in `src/lib/pipeline/sources/`)
 
-1. BSE bulk announcements — highest ROI, free, structured
-2. PIB RSS feed — government announcements
-3. News RSS (ET, Business Standard, Mint) — sector news
-4. CPPP scraper — tender awards (Playwright, harder)
-5. PDF pipeline — annual reports + concall transcripts → ManagementPromise table
+| File | Source | Method |
+|---|---|---|
+| `nse-filings.ts` | NSE corporate announcements | HTTP + homepage cookie; broad keywords + category denylist |
+| `pib-rss.ts` | PIB press releases | RSS + 3-step English PRID lookup (matchAll diff-from-Hindi) |
+| `news-rss.ts` | ET Markets/Stocks/Industry, BS Markets, Mint | RSS; broad keywords + rupee-with-unit regex |
+| `niti-scraper.ts` | NITI Aayog publications | HTML scrape of `/whats-new` — server-rendered Drupal |
+| `cppp-scraper.ts` | CPPP high-value tenders (Works/Goods/Services ≥₹1–100cr) | HTTP POST + CAPTCHA bypass — alt text contains the answer |
+
+**Filtering philosophy:** Scrapers cast a wide net (broad keywords). Claude extraction is the real filter. Only categorical denylist at scrape time — AGM/ESOP/dividend `desc` types for NSE, which are categorically never capex signals.
 
 ### AI extraction model choice
 
-- **Haiku 4.5** for most tasks: BSE announcements, PIB press releases, news articles
-- **Sonnet 4.6** only for: annual reports, concall PDFs, complex multi-entity extraction
-- Use **Batch API** for all nightly jobs (50% cost saving)
-- Use **prompt caching** for system prompts (90% saving on repeated context)
+- **Haiku 4.5** — all announcement/news/tender extraction (fast, cheap, sufficient)
+- **Sonnet 4.6** — annual reports, concall PDFs, complex multi-entity documents (not yet built)
+- Prompt caching on system prompt — ~90% cost reduction on repeated calls
 - Target cost: ~$3–10/month total
 
-### Key pipeline files (to create)
+### Still to build
 
-```
-src/lib/pipeline/
-├── sources/
-│   ├── bse-filings.ts       First to build — BSE bulk download
-│   ├── pib-rss.ts           PIB RSS feed parser
-│   ├── news-rss.ts          ET/BS/Mint RSS aggregator
-│   ├── cppp-scraper.ts      Playwright scraper for tenders
-│   └── pdf-fetcher.ts       Downloads annual reports + concalls
-└── extract/
-    ├── extract-announcement.ts   Claude API extraction for BSE/PIB/news
-    ├── extract-tender.ts         Structured tender data from raw text
-    └── extract-promise.ts        Management promises from PDFs
-```
+- `pdf-fetcher.ts` — downloads annual reports + concall transcripts from NSE filings
+- `extract-promise.ts` — Claude Sonnet extraction of management promises from PDFs
+- Nightly cron schedule (GitHub Actions or VPS)
 
 ---
 
@@ -258,7 +259,7 @@ import { Space_Grotesk, DM_Sans, DM_Mono } from "next/font/google";
 
 ## Sector Colours (used consistently across all pages)
 
-Defined in `src/lib/seed-data.ts` — must stay consistent across seed data, DB seed script, and any hardcoded references.
+These are defined in the DB `Sector` model. Must stay consistent across any hardcoded references, DB seed scripts, and the frontend.
 
 | Sector                  | Hex       |
 | ----------------------- | --------- |
@@ -291,11 +292,12 @@ Defined in `src/lib/seed-data.ts` — must stay consistent across seed data, DB 
 ## Environment Variables
 
 ```
-DATABASE_URL        Supabase Transaction Pooler (port 6543) — for Prisma queries
-DIRECT_URL          Supabase Direct Connection (port 5432) — for migrations only
+DATABASE_URL              Supabase Transaction Pooler (port 6543) — for Prisma queries
+DIRECT_URL                Supabase Direct Connection (port 5432) — for migrations only
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY    Server-side only — never expose to browser
+SUPABASE_SERVICE_ROLE_KEY Server-side only — never expose to browser
+ANTHROPIC_API_KEY         Required for Claude extraction — get from console.anthropic.com
 ```
 
 See `.env.example` for full template.

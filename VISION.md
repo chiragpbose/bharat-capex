@@ -84,7 +84,7 @@ _"See the government's money move before the market does."_
 | UI Components | shadcn/ui (base-ui variant)                        | Uses `@base-ui/react` not `@radix-ui`                                  |
 | Fonts         | Space Grotesk (display) · DM Sans (body) · DM Mono | All via `next/font/google`                                             |
 | ORM           | Prisma 7.8.0                                       | Requires `prisma.config.ts` + driver adapter — see notes               |
-| Database      | Supabase (PostgreSQL)                              | **NOT YET CONNECTED**                                                  |
+| Database      | Supabase (PostgreSQL)                              | ✅ Connected — transaction pooler (port 6543) for queries              |
 | Validation    | Zod v4.4.3                                         | `z.record(z.string(), z.unknown())` — `.refine()` API changed          |
 | React         | v19                                                | `<Context value={...}>` not `<Context.Provider>`                       |
 
@@ -96,15 +96,16 @@ _"See the government's money move before the market does."_
 - Constructor requires driver adapter: `new PrismaClient({ adapter: new PrismaPg(pool) })`
 - DB client lives at `src/lib/db.ts` using singleton pattern
 
-**Data pipeline stack (to be built):**
+**Data pipeline stack:**
 | Layer | Technology | Notes |
 |---|---|---|
-| Scraping (static) | Cheerio + node-fetch | PIB, news sites, ministry pages |
-| Scraping (JS-heavy) | Playwright | CPPP, GeM, BSE bulk download |
-| PDF extraction | pdf-parse + Claude API | Annual reports, concall transcripts |
-| AI processing | Claude API (claude-sonnet-4-20250514) | Entity extraction, company tagging, promise detection |
-| Job scheduling | Supabase Edge Functions or node-cron | Runs scrapers on schedule |
-| Raw storage | Supabase Storage | Stores raw HTML, PDFs before processing |
+| Scraping (static HTML) | Native `fetch` + regex | PIB, NITI Aayog, CPPP (no Cheerio/Playwright needed) |
+| Scraping (authenticated) | Native `fetch` + cookie grab | NSE — one homepage fetch for Akamai session cookie |
+| Scraping (CAPTCHA) | HTTP POST + alt-text bypass | CPPP — CAPTCHA answer is in the img alt attribute |
+| PDF extraction | pdf-parse + Claude API | Annual reports, concall transcripts — not yet built |
+| AI processing | Claude Haiku 4.5 | Extraction for announcements/news; Sonnet for PDFs |
+| Job scheduling | `tsx` + cron (TBD) | `npm run pipeline:run` for now; scheduling not yet set up |
+| Raw storage | `RawAnnouncement` table in Supabase | Stores title/body/source before AI extraction |
 
 ---
 
@@ -132,35 +133,39 @@ _"See the government's money move before the market does."_
 ```
 src/
 ├── app/
-│   ├── page.tsx                    Homepage
-│   ├── reforms/page.tsx            Reforms listing
-│   ├── reforms/[slug]/page.tsx     Reform detail
-│   ├── companies/page.tsx          Companies listing
-│   ├── companies/[slug]/page.tsx   Company detail
-│   ├── tenders/page.tsx            Tenders feed
-│   ├── schemes/page.tsx            Schemes listing
-│   └── schemes/[slug]/page.tsx     Scheme detail
+│   ├── page.tsx                         Homepage — real DB queries ✅
+│   ├── reforms/page.tsx                 Reforms listing — seed-data (to replace)
+│   ├── reforms/[slug]/page.tsx          Reform detail — seed-data (to replace)
+│   ├── companies/page.tsx               Companies listing — seed-data (to replace)
+│   ├── companies/[slug]/page.tsx        Company detail — seed-data (to replace)
+│   ├── tenders/page.tsx                 Tenders feed — seed-data (to replace)
+│   ├── schemes/page.tsx                 Schemes listing — seed-data (to replace)
+│   └── schemes/[slug]/page.tsx          Scheme detail — seed-data (to replace)
 ├── components/
-│   ├── layout/nav.tsx              Sticky nav
-│   └── reforms/reform-filters.tsx  Client dropdown filters
+│   ├── layout/nav.tsx                   Sticky nav
+│   └── reforms/reform-filters.tsx       Client dropdown filters
 ├── lib/
-│   ├── seed-data.ts                ← ALL PAGES USE THIS RIGHT NOW (to be replaced)
-│   └── db.ts                       Prisma singleton (ready, DB not connected)
-└── generated/prisma/               Prisma client (generated, gitignored)
+│   ├── db.ts                            Prisma singleton — use this everywhere
+│   ├── utils.ts                         cn() helper
+│   ├── data/reforms.ts                  Data access layer (reforms only — rest to build)
+│   ├── validations/                     Zod schemas (reform, tender, company)
+│   └── pipeline/
+│       ├── run.ts                       Pipeline orchestrator — npm run pipeline:run
+│       ├── sources/
+│       │   ├── nse-filings.ts           NSE corporate announcements ✅
+│       │   ├── pib-rss.ts               PIB press releases ✅
+│       │   ├── news-rss.ts              ET/BS/Mint RSS feeds ✅
+│       │   ├── niti-scraper.ts          NITI Aayog publications ✅
+│       │   ├── cppp-scraper.ts          CPPP high-value tenders ✅
+│       │   └── bse-filings.ts           Stub — replaced by NSE
+│       └── extract/
+│           └── extract-announcement.ts  Claude Haiku extraction ✅
+└── generated/prisma/                    Auto-generated Prisma client — never edit
 
 prisma/
-├── schema.prisma                   Full DB schema (13 models)
-└── prisma.config.ts                Prisma 7 config
+├── schema.prisma                        Full DB schema (13 models + RawAnnouncement)
+└── prisma.config.ts                     Prisma 7 config
 ```
-
-### Data currently in seed-data.ts
-
-- **10 sectors** with govt outlay + order book figures
-- **6 reforms** (Defence FDI, PLI Semicon, Gati Shakti, Nuclear private, DFC, Ship recycling)
-- **6 companies** (LT, BEL, RVNL, KNRCON, Cochin Shipyard, NTPC)
-- **5 tenders**
-- **7 schemes** (PLI Semicon, Gati Shakti, PLI Defence, PLI Solar, Sagarmala, Green H₂, PLI Telecom)
-- All figures are realistic estimates, not actual verified data
 
 ### Design system
 
@@ -175,27 +180,31 @@ prisma/
 
 ## 5. Current Limitations
 
-1. **Zero real data** — Everything is hardcoded in `seed-data.ts`. The product looks complete but contains no verified information.
-2. **No database connection** — Supabase project not yet created. Schema is written and validated, waiting for credentials.
-3. **No data pipeline** — No scrapers, no AI extraction, no scheduled jobs. All data is static and manual.
-4. **No search** — Can't search across companies, reforms, or tenders.
-5. **No auth** — No user accounts, no watchlists, no personalisation.
-6. **No admin panel** — Only needed if manual entry is ever required. Not priority.
-7. **Company discovery is missing** — The platform cannot yet surface companies from reforms/tenders automatically. This is core to the vision.
+1. **Most pages still use seed-data** — Homepage uses real DB queries, but reforms, companies, tenders, and schemes pages still import from the old hardcoded `seed-data.ts`. The data access layer (`src/lib/data/`) needs to be built out for these sections.
+2. **Claude extraction not yet running** — The extraction layer is built and tested, but `ANTHROPIC_API_KEY` in `.env` is still a placeholder. Set the real key → run `npm run pipeline:run` → first real structured data in DB.
+3. **No pipeline schedule** — The pipeline runs manually via `npm run pipeline:run`. No cron job or scheduled trigger yet. Needs to be set up to run nightly.
+4. **CPPP awarded contracts missing** — The CPPP "Result of Tenders" endpoint (who won what) returns empty with current query parameters. Active high-value tenders work. Awarded contracts need investigation.
+5. **No PDF pipeline** — Annual reports and concall transcripts are the source for the Management Promises tracker. Not yet built — this is Phase 3.
+6. **Company discovery is missing** — The platform cannot yet surface companies from reforms/tenders automatically. This is the core investment utility and requires the full pipeline to be running first.
+7. **No search** — Can't search across companies, reforms, or tenders. Phase 4.
+8. **No auth** — No user accounts, no watchlists, no personalisation. Phase 4.
 
 ---
 
 ## 6. High-Level Roadmap
 
-### Phase 1 — Real Data (CURRENT PRIORITY)
+### Phase 1 — Real Data (IN PROGRESS — ~70% done)
 
-Connect the database and activate the automated data pipeline. This is what turns a prototype into a tool that actually earns money in the market.
+Connect the database, build and activate the automated data pipeline.
 
-**The pipeline architecture:**
-
+**Pipeline architecture:**
 ```
-Sources → Scrapers/Fetchers → Raw Storage → AI Extraction → Structured DB → Frontend
+Sources → Scrapers → RawAnnouncement table → Claude extraction → extractedData JSON → Frontend
 ```
+
+**Done:** Supabase connected, schema live, 5 scrapers built (NSE, PIB, News, NITI Aayog, CPPP), Claude Haiku extraction layer built.
+
+**Remaining:** Set Anthropic API key → run pipeline → verify extraction quality → connect all pages to real DB queries (replace seed-data.ts) → set up nightly cron schedule.
 
 ### Phase 2 — Company Discovery Engine
 
@@ -217,91 +226,55 @@ If the product proves genuinely useful and the data is solid, revisit: freemium 
 
 ## 7. Immediate Next Steps
 
-### Step 1: Connect Supabase
+### Step 1: Activate Claude extraction ← next session
 
-1. Create project at supabase.com — choose `ap-south-1` (Mumbai)
-2. Copy `.env.example` to `.env`
-3. Fill in `DATABASE_URL` (Transaction pooler, port 6543) and `DIRECT_URL` (Direct, port 5432)
-4. Fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-5. Run `npx prisma db push` — creates all tables
+1. Add real `ANTHROPIC_API_KEY` to `.env` (console.anthropic.com, $5 minimum, lasts ~5 months)
+2. Run `npm run pipeline:run`
+3. Run `npx tsx src/lib/pipeline/check-data.ts` to verify extraction quality
+4. Check `extractedData` JSON in Supabase — ensure `isRelevant`, `valueCrore`, `summary` fields look right
 
-### Step 2: Build the BSE filings scraper (first pipeline)
+### Step 2: Connect all pages to real DB
 
-BSE company announcements are the highest-ROI first source. Structured, free, reliable, updated daily. Covers order wins, quarterly results, capex announcements for every listed company.
+Replace `seed-data.ts` imports across companies, tenders, and schemes pages. Build out the data access layer:
 
-File: `src/lib/pipeline/sources/bse-filings.ts`
-
-What it does:
-
-- Fetches BSE bulk announcement download (CSV/XML — available free)
-- Filters for announcement types relevant to the thesis: order wins, capex guidance, quarterly results, scheme-related filings
-- Stores raw announcements in Supabase Storage
-
-### Step 3: Build the AI extraction layer
-
-File: `src/lib/pipeline/extract/extract-announcement.ts`
-
-What it does:
-
-- Sends raw BSE announcement text to Claude API
-- Prompt: "Extract: company name, ticker, announcement type, contract value if present, counterparty (awarding authority), sector, scheme if mentioned. Return as JSON."
-- Writes structured output to DB via Prisma
-
-### Step 4: Add PIB + news RSS feeds
-
-File: `src/lib/pipeline/sources/rss-feeds.ts`
-
-Sources (all free, no scraping needed):
-
-- PIB RSS: `https://pib.gov.in/RssMain.aspx`
-- Economic Times infrastructure RSS
-- Business Standard economy RSS
-- Each item goes through the same AI extraction pipeline as BSE announcements
-
-### Step 5: CPPP tender scraper
-
-File: `src/lib/pipeline/sources/cppp-scraper.ts`
-
-Hardest source but highest signal for the Tenders section. Requires Playwright (JS-heavy site). Build after the RSS pipeline is proven.
-
-### Step 6: PDF pipeline for Management Promises
-
-File: `src/lib/pipeline/sources/pdf-fetcher.ts`
-
-- Downloads annual reports and concall transcripts from BSE filings
-- Sends to Claude API with a specific prompt to extract management promises
-- Populates the `ManagementPromise` table automatically
-
-### Step 7: Switch pages off seed-data
-
-Replace all `import { ... } from "@/lib/seed-data"` with queries through `src/lib/db.ts`.
-
-Data access layer at `src/lib/data/`:
-
-- `src/lib/data/reforms.ts`
 - `src/lib/data/companies.ts`
 - `src/lib/data/tenders.ts`
 - `src/lib/data/schemes.ts`
 - `src/lib/data/sectors.ts`
 
-### Step 8: Build remaining UI (Phase 3)
+`reforms.ts` already exists but is not fully wired. Once these are built, `seed-data.ts` can be deleted completely from remaining pages.
 
-Once real data is flowing:
+### Step 3: Set up nightly pipeline schedule
+
+Run the pipeline automatically every night. Options:
+- **Simplest:** GitHub Actions cron (free, triggers `npm run pipeline:run` on a schedule)
+- **Later:** Supabase Edge Functions or a VPS cron
+
+### Step 4: Investigate CPPP awarded contracts
+
+The "Result of Tenders" section shows who won what — the awarded contract, not just the open tender. This is the direct order-win data for the Tenders section. Returns empty with current query; likely needs date parameters. Investigate the form POST structure.
+
+### Step 5: PDF pipeline for Management Promises (Phase 3)
+
+File: `src/lib/pipeline/sources/pdf-fetcher.ts`
+
+- Downloads annual reports and concall transcripts attached to NSE/BSE filings
+- Sends to Claude Sonnet (not Haiku — PDFs are complex multi-page documents) with a prompt to extract management promises
+- Populates the `ManagementPromise` table — what was said, by whom, by when
+- This powers the `/promises` page — the most differentiated feature on the platform
+
+### Step 6: Build remaining UI pages
 
 **Management Promises** `/promises` + section on `/companies/[slug]`
-
-- Quote, speaker, source type (concall / annual report / AGM / exchange filing), date, deadline, status, resolution
-- The most unique feature on the platform — no other tool tracks this
+- Quote, speaker, source (concall / annual report / AGM), date, deadline, status
+- No other tool tracks this automatically
 
 **Policy Calendar** `/calendar`
-
-- Forward-looking: PLI disbursement deadlines, budget dates, scheme windows, upcoming tender floats
+- Forward-looking: PLI disbursement deadlines, budget dates, scheme windows, upcoming tenders
 - Month/week view, filterable by sector
 
 **Budget Tracker** `/budget`
-
-- Union Budget allocations by sector, year-over-year
-- Bar chart: which sectors got more/less than previous year
+- Union Budget allocations by sector, year-over-year comparison
 
 ---
 
