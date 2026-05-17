@@ -56,12 +56,13 @@ Build conviction. Hold 2–3 years.
 | Section | What it does |
 |---|---|
 | Homepage | Feed-first view of latest automated activity (tenders + reform moves), sector capex bars, company movers |
-| Reforms | Every major policy reform — status tracked from Proposed → Notified → Implemented → Operational |
+| Reforms | Every major policy reform — status tracked from Proposed → Notified → Implemented → Operational; thesis health indicator; budget outlay vs. actual spending |
 | Tenders | Contract awards feed — which listed company won what, for how much, under which scheme |
 | Schemes | PLI, Gati Shakti, Sagarmala, etc. — outlay, disbursement progress, beneficiary companies |
-| Companies | NSE/BSE-listed companies — financials, order book, tenders won, linked reforms, scheme beneficiary status |
-| Promises | Management accountability tracker — what was said, by whom, by when, and whether it happened |
+| Companies | Full investment dossier — financials, order book trajectory, OCF vs PAT, promoter activity, promise delivery rate, government receivables, peer comparison, supply chain position, linked reforms |
+| Promises | Management accountability tracker — what was said, by whom, by when, and whether it happened; delivery rate score per company |
 | Calendar | Forward-looking policy events — PLI disbursement deadlines, budget dates, scheme windows, upcoming tenders |
+| Budget | Union Budget allocations by sector, year-over-year comparison, outlay vs. actual spend gap |
 
 **Value proposition in one line:**  
 _"See the government's money move before the market does."_
@@ -134,20 +135,25 @@ _"See the government's money move before the market does."_
 src/
 ├── app/
 │   ├── page.tsx                         Homepage — real DB queries ✅
-│   ├── reforms/page.tsx                 Reforms listing — seed-data (to replace)
-│   ├── reforms/[slug]/page.tsx          Reform detail — seed-data (to replace)
-│   ├── companies/page.tsx               Companies listing — seed-data (to replace)
-│   ├── companies/[slug]/page.tsx        Company detail — seed-data (to replace)
-│   ├── tenders/page.tsx                 Tenders feed — seed-data (to replace)
-│   ├── schemes/page.tsx                 Schemes listing — seed-data (to replace)
-│   └── schemes/[slug]/page.tsx          Scheme detail — seed-data (to replace)
+│   ├── reforms/page.tsx                 Reforms listing — real DB queries ✅
+│   ├── reforms/[slug]/page.tsx          Reform detail — real DB queries ✅
+│   ├── companies/page.tsx               Companies listing — real DB queries ✅
+│   ├── companies/[slug]/page.tsx        Company detail — real DB queries ✅
+│   ├── tenders/page.tsx                 Tenders feed — real DB queries ✅
+│   ├── schemes/page.tsx                 Schemes listing — real DB queries ✅
+│   └── schemes/[slug]/page.tsx          Scheme detail — real DB queries ✅
 ├── components/
 │   ├── layout/nav.tsx                   Sticky nav
 │   └── reforms/reform-filters.tsx       Client dropdown filters
 ├── lib/
 │   ├── db.ts                            Prisma singleton — use this everywhere
 │   ├── utils.ts                         cn() helper
-│   ├── data/reforms.ts                  Data access layer (reforms only — rest to build)
+│   ├── data/
+│   │   ├── reforms.ts                   ✅
+│   │   ├── companies.ts                 ✅
+│   │   ├── tenders.ts                   ✅
+│   │   ├── schemes.ts                   ✅
+│   │   └── sectors.ts                   ✅
 │   ├── validations/                     Zod schemas (reform, tender, company)
 │   └── pipeline/
 │       ├── run.ts                       Pipeline orchestrator — npm run pipeline:run
@@ -180,10 +186,10 @@ prisma/
 
 ## 5. Current Limitations
 
-1. **Most pages still use seed-data** — Homepage uses real DB queries, but reforms, companies, tenders, and schemes pages still import from the old hardcoded `seed-data.ts`. The data access layer (`src/lib/data/`) needs to be built out for these sections.
-2. **Claude extraction not yet running** — The extraction layer is built and tested, but `ANTHROPIC_API_KEY` in `.env` is still a placeholder. Set the real key → run `npm run pipeline:run` → first real structured data in DB.
+1. **Structured tables are empty** — All pages are wired to real DB queries, but Sector, Company, Reform, Scheme, and Tender tables have no data. The pipeline only writes to `RawAnnouncement`. These tables will be populated by the company discovery engine (Phase 2), which promotes extracted signals into structured records. No manual seeding.
+2. **Claude extraction not yet running** — The extraction layer is built and type-checked, but `ANTHROPIC_API_KEY` in `.env` is still a placeholder. Set the real key → run `npm run pipeline:run` → first signals in `RawAnnouncement` with `extractedData` populated.
 3. **No pipeline schedule** — The pipeline runs manually via `npm run pipeline:run`. No cron job or scheduled trigger yet. Needs to be set up to run nightly.
-4. **CPPP awarded contracts missing** — The CPPP "Result of Tenders" endpoint (who won what) returns empty with current query parameters. Active high-value tenders work. Awarded contracts need investigation.
+4. **CPPP awarded contracts — closed** — Investigated: endpoint works with `year` parameter, but listing has no value or winner; detail pages are session-locked. NSE filings are the correct source for listed company order wins.
 5. **No PDF pipeline** — Annual reports and concall transcripts are the source for the Management Promises tracker. Not yet built — this is Phase 3.
 6. **Company discovery is missing** — The platform cannot yet surface companies from reforms/tenders automatically. This is the core investment utility and requires the full pipeline to be running first.
 7. **No search** — Can't search across companies, reforms, or tenders. Phase 4.
@@ -193,7 +199,7 @@ prisma/
 
 ## 6. High-Level Roadmap
 
-### Phase 1 — Real Data (IN PROGRESS — ~70% done)
+### Phase 1 — Real Data (IN PROGRESS — ~85% done)
 
 Connect the database, build and activate the automated data pipeline.
 
@@ -202,17 +208,57 @@ Connect the database, build and activate the automated data pipeline.
 Sources → Scrapers → RawAnnouncement table → Claude extraction → extractedData JSON → Frontend
 ```
 
-**Done:** Supabase connected, schema live, 5 scrapers built (NSE, PIB, News, NITI Aayog, CPPP), Claude Haiku extraction layer built.
+**Done:** Supabase connected, schema live, all 8 pages on real DB queries, full data access layer built, 5 scrapers built (NSE, PIB, News, NITI Aayog, CPPP), Claude Haiku extraction layer built.
 
-**Remaining:** Set Anthropic API key → run pipeline → verify extraction quality → connect all pages to real DB queries (replace seed-data.ts) → set up nightly cron schedule.
+**Remaining:** Set Anthropic API key → run pipeline → verify extraction quality → set up nightly cron → build company discovery engine (Phase 2) to promote extracted signals into structured Company/Tender/Reform records.
 
 ### Phase 2 — Company Discovery Engine
 
-The platform surfaces relevant NSE/BSE-listed companies automatically from the policy-tender chain. A new reform triggers a lookup: which companies operate in this sector? Which have won related tenders? This is the core investment utility.
+The platform surfaces relevant NSE/BSE-listed companies automatically from the policy-tender chain.
+
+**First-order discovery:** When a reform/scheme/tender is detected, identify which NSE/BSE-listed companies operate in that sector. Source: NSE sector index membership lists (scrapeable, no manual entry).
+
+**Second-order inference (supply chain reasoning):** When a high-signal announcement arrives (e.g. PLI semiconductor tranche disbursed), Claude Sonnet runs a second extraction pass identifying:
+1. **Direct beneficiaries** — companies that win contracts or receive incentives directly
+2. **Upstream suppliers** — industries/companies that supply inputs (e.g. semiconductor fabs → industrial gases → Linde India, INOX Air Products)
+3. **Infrastructure enablers** — logistics, construction, utilities that must expand alongside
+4. **Contrarian risks** — industries or companies that may be disrupted or displaced
+
+This second-order reasoning is the platform's core differentiation. Most investors see the headline. BharatCapex surfaces the supply chain.
+
+**Supply chain map** — visualised per reform/scheme as a tree: policy → direct beneficiaries → upstream suppliers → enablers.
 
 ### Phase 3 — Conviction-Building Features
 
-Management Promises tracker, Policy Calendar, Budget Tracker. These are the features that differentiate BharatCapex from anything else available.
+The full investment dossier on each company. What differentiates BharatCapex from Screener.in or Tijori is that we connect financial quality to the policy-tender chain that's driving it.
+
+**Thesis tracking:**
+- **Thesis health indicator** per reform/scheme — 🟢 Active (disbursing, tenders flowing) / 🟡 Delayed (announced, stalled) / 🔴 At risk (cut, restructured)
+- **Budget outlay vs. actual spending** — the gap between sanctioned outlay and actual disbursement, by sector. Widening gap = thesis risk. Narrowing = catalyst.
+- **Sector cycle position** — Early (policy only) / Inflecting (tenders starting) / Executing (companies winning orders) / Late cycle (visible in earnings, premium priced in)
+
+**Business quality metrics** (sourced from quarterly results PDFs via PDF pipeline):
+- **ROCE** — return on capital employed; >15–20% consistently = value-creating business
+- **OCF vs PAT chart** — operating cash flow vs. accounting profit, quarterly over 3 years; persistent divergence (PAT rising, OCF flat) = quality red flag; almost no retail tool shows this
+- **Order book trajectory** — 6–8 quarters of order book charted, not just current snapshot; trend matters more than the number
+- **Revenue growth CAGR** — 3–5 year compound growth; 15%+ in a structural capex theme is the bar
+- **Debt/Equity ratio** — <1x and falling over time; rising debt in a government-contract business is dangerous
+- **Working capital / debtor days** — how long does money stay stuck; deterioration is an early warning
+- **Government receivables** — unique to India's capex theme; companies waiting 6–18 months to be paid by government bodies show cash stress even with strong order books; critical for EPC, infra, defence companies
+- **Capital allocation history** — what has management done with cash over 5 years: reinvested, paid dividends, acquired, or let idle; reveals whether management thinks like owners
+
+**Governance and management quality** (sourced from NSE disclosures + PDF pipeline):
+- **Promoter activity tracker** — insider buying/selling disclosed monthly to NSE; promoter buying with personal capital (not ESOPs) is one of the strongest possible conviction signals
+- **Promoter pledge %** — disclosed quarterly; >20–30% pledging = promoter is personally financially stressed; stressed promoters make bad decisions
+- **Promise delivery rate** — computed automatically from the Promises tracker; delivery rate over 2–3 years is the single best proxy for management quality; companies at 85%+ have earned trust
+- **Auditor signals** — qualifications, emphasis of matter paragraphs, auditor changes; extracted from annual report PDFs; unexplained auditor change after many years = red flag
+- **Related party transactions** — value siphoning mechanism; extracted from annual reports
+
+**Peer comparison table** — for every company, show 3–4 sector peers side by side on ROCE, order book/revenue, D/E, revenue growth; makes relative quality immediately obvious.
+
+**Valuation context** (not a trading signal — conviction context only):
+- PE vs. historical range — is the stock cheap or expensive relative to its own history
+- Order book visibility premium — justified premium for companies with 3–4 years of locked-in work vs. 1 year
 
 ### Phase 4 — User Features
 
@@ -226,23 +272,12 @@ If the product proves genuinely useful and the data is solid, revisit: freemium 
 
 ## 7. Immediate Next Steps
 
-### Step 1: Activate Claude extraction ← next session
+### Step 1: Activate Claude extraction ← current priority
 
-1. Add real `ANTHROPIC_API_KEY` to `.env` (console.anthropic.com, $5 minimum, lasts ~5 months)
+1. Add real `ANTHROPIC_API_KEY` to `.env` (console.anthropic.com)
 2. Run `npm run pipeline:run`
 3. Run `npx tsx src/lib/pipeline/check-data.ts` to verify extraction quality
 4. Check `extractedData` JSON in Supabase — ensure `isRelevant`, `valueCrore`, `summary` fields look right
-
-### Step 2: Connect all pages to real DB
-
-Replace `seed-data.ts` imports across companies, tenders, and schemes pages. Build out the data access layer:
-
-- `src/lib/data/companies.ts`
-- `src/lib/data/tenders.ts`
-- `src/lib/data/schemes.ts`
-- `src/lib/data/sectors.ts`
-
-`reforms.ts` already exists but is not fully wired. Once these are built, `seed-data.ts` can be deleted completely from remaining pages.
 
 ### Step 3: Set up nightly pipeline schedule
 
@@ -250,9 +285,9 @@ Run the pipeline automatically every night. Options:
 - **Simplest:** GitHub Actions cron (free, triggers `npm run pipeline:run` on a schedule)
 - **Later:** Supabase Edge Functions or a VPS cron
 
-### Step 4: Investigate CPPP awarded contracts
+### ~~Step 4: Investigate CPPP awarded contracts~~ — Done, closed
 
-The "Result of Tenders" section shows who won what — the awarded contract, not just the open tender. This is the direct order-win data for the Tenders section. Returns empty with current query; likely needs date parameters. Investigate the form POST structure.
+Investigated. The endpoint requires `year` parameter (was the missing piece). But the listing has no contract value or winner name — both are on session-locked detail pages. Not scrapeable without Playwright. NSE filings cover this better. No further action.
 
 ### Step 5: PDF pipeline for Management Promises (Phase 3)
 
@@ -294,7 +329,7 @@ File: `src/lib/pipeline/sources/pdf-fetcher.ts`
 
 **NSE vs BSE:** NSE's corporate announcements API returns identical data (companies file with both exchanges) and requires only one cookie fetch. BSE's API is blocked by Akamai bot protection requiring Playwright + browser session. NSE is the complete replacement — no data loss.
 
-**CPPP "Result of Tenders" (awarded contracts):** The awards section has stricter server-side validation — returns no records without specific date/org parameters that aren't obvious from the form HTML. Needs investigation. For now, high-value active tenders give a 3–6 month pipeline view (which tender → which company is likely to win → order inflow ahead). That's actually the higher-value leading indicator.
+**CPPP "Result of Tenders" (awarded contracts):** Investigated and closed. The endpoint works when `year` is supplied (that was the missing parameter). However, the listing table contains only AOC date, title, and awarding body — no contract value, no winner name. Both live on session-locked detail pages (signed token URLs that expire in seconds, require a persistent browser session to access — not worth the Playwright complexity). NSE corporate filings are the correct source: every listed company that wins a significant contract files a mandatory exchange disclosure within 24 hours, with company name, value, and awarding body all present.
 
 **Defence sector coverage:** All five sources cover defence. NSE filings catch order wins from HAL, BEL, Mazagon, Cochin Shipyard etc. PIB covers DAC (Defence Acquisition Council) approvals and indigenisation targets. CPPP includes defence ordnance/equipment tenders. Gap: large strategic platform acquisitions (fighter jets, warships, submarines) go through the Defence Acquisition Procedure (DAP), not standard tendering — but those surface in NSE filings within days of contract signing anyway.
 
@@ -347,7 +382,232 @@ The Anusandhan National Research Foundation was established under the ANRF Act 2
 
 ---
 
-## 11. The Bigger Picture
+## 11. The Intelligence Layer — Full Feature Specification
+
+Everything in this section is Phase 2 and Phase 3 work. Recorded here so the design intent is not lost between sessions.
+
+### What the company detail page becomes
+
+`/companies/[slug]` is the centrepiece of the product. It goes from showing static financials to a complete investment dossier. No other tool in India combines all of this for retail investors — Screener/Tijori cover financials, Trendlyne covers ownership, nobody connects it to the policy-tender chain driving the cycle.
+
+```
+Company: RVNL (Rail Vikas Nigam Ltd)          Quality Score: ●●●○○  72/100
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SECTOR CYCLE        SUPPLY CHAIN POSITION       THESIS HEALTH
+Executing ●●●○ Late Direct beneficiary          🟢 Active
+                    Upstream: Titagarh, HBL     Policy risk: Low
+
+FINANCIALS                         GOVERNANCE
+ROCE: 18.4%    D/E: 0.3x          Promoter pledge: 0%
+OCF vs PAT: ✅ aligned             Promoter buying: ↑ Mar 2026 (₹12cr)
+Order book: ₹84,000cr (4.2×)      Promise delivery rate: 79% 🟡
+Govt receivables: 148 days ⚠       Auditor: No qualifications
+Export revenue: 2% (flat) —        Key person risk: Low (professional mgmt)
+Working capital: ↑ deteriorating ⚠
+
+ORDER BOOK TRAJECTORY (8Q)        EARNINGS: GUIDANCE VS ACTUAL
+[bar chart — trend building]      [beat/miss bar chart — 8 quarters]
+
+FORWARD P&L (if mgmt delivers)
+Bear: FY28 PAT ₹820cr | Base: ₹1050cr | Bull: ₹1300cr
+Assumptions: 4.2× OB/rev maintained, ROCE stable at 18%
+
+INSTITUTIONAL TRENDS              CONCALL SENTIMENT
+FII: ↑ +2.1% (3 qtrs)            Q4FY26: Cautious 🟡 (was Confident)
+DII: → flat                       Tone shift: hedging on order inflows
+MF: Mirae ↑, Parag Parikh ↑
+
+PEER COMPARISON                   VALUATION CONTEXT
+RVNL vs IRCON vs KNR vs HG Infra  PE: 22x  |  3yr range: 15–38x
+[ROCE / OB ratio / D/E / Rev CAGR] Currently: Middle of historical range
+[Dividend / Buyback / Export %]
+
+DIVIDEND & BUYBACK                LINKED REFORMS
+FY26: ₹2.20/share (payout 28%)   ■ Railways capex ₹2.62L cr 🟢
+FY25: ₹2.00 | FY24: ₹1.75        ■ Kavach rollout 🟡 Delayed
+No buybacks — reinvesting in biz  ■ Metro expansion 🟢
+```
+
+### Feature-by-feature specification
+
+**Thesis Health Indicator**
+- Per reform and per scheme; computed from: disbursement progress, tender activity in last 90 days, PIB/news signals
+- 🟢 Active / 🟡 Delayed / 🔴 At risk
+- Shown on reform detail page, scheme detail page, and company page (for each linked reform)
+
+**Budget Outlay vs. Actual Spending**
+- Sanctioned outlay (from scheme creation) vs. disbursed (updated from PIB/pipeline signals)
+- Shown as a progress bar with % deployed; year-over-year comparison
+- A gap widening over time = thesis risk; gap closing = upcoming catalyst
+
+**Sector Cycle Position**
+- Early (policy announced, no tenders) / Inflecting (tenders starting) / Executing (companies winning orders) / Late (visible in earnings)
+- Shown on sector pages and company pages
+- Updated by pipeline signals — first tender in a sector moves it from Early to Inflecting
+
+**Supply Chain Map**
+- Generated by Claude Sonnet on high-relevance announcements (isRelevant=true + valueCrore > threshold)
+- Stored as structured JSON: `{ direct: [...], suppliers: [...], enablers: [...], risks: [...] }`
+- Displayed as a tree on reform/scheme detail pages; each node links to the company page if listed
+
+**Second-order extraction pipeline** (`extract-adjacencies.ts`)
+- Triggers on: isRelevant=true AND (valueCrore > 500 OR source = PIB/NITI)
+- Uses Claude Sonnet (not Haiku — needs deeper reasoning)
+- Prompt asks for direct + upstream + enabler + risk companies with NSE tickers
+- Output stored in a new `extractedAdjacencies` JSON field on `RawAnnouncement`
+
+**Order Book Trajectory**
+- Source: `CompanyFundamentals` table (already in schema — `orderBookCrore` per period)
+- Chart: 6–8 quarters; show absolute value + YoY growth rate
+- Flag: if order book has shrunk 2+ consecutive quarters, show warning
+
+**OCF vs PAT**
+- Source: quarterly results PDFs → PDF pipeline extraction
+- Chart: side-by-side bars per quarter over 3 years
+- Flag: if OCF < 70% of PAT for 3+ consecutive quarters, show quality warning
+
+**Government Receivables / Debtor Days**
+- Source: annual report PDF pipeline (balance sheet — trade receivables / revenue × 365)
+- Threshold: >180 days = high risk; >120 days = caution; <90 days = healthy
+- Particularly important for: EPC companies (L&T, KNR), railway infra (RVNL, IRCON), defence (HAL, BEL)
+
+**Promoter Activity Tracker**
+- Source: NSE bulk/block deals + shareholding disclosures (monthly, public, scrapeable)
+- Show: insider buy/sell events as a timeline; net direction over last 12 months
+- Highlight: promoter open-market purchases (not ESOPs) as especially high-signal
+
+**Promoter Pledge %**
+- Source: NSE shareholding pattern (quarterly)
+- Thresholds: <10% safe / 10–25% caution / >25% red flag
+- Show trend — pledging increasing over time is worse than a steady high %
+
+**Promise Delivery Rate**
+- Computed from `ManagementPromise` table: delivered / (delivered + missed) over last 3 years
+- Shown as a % score on the company page
+- Colour: >75% green / 50–75% amber / <50% red
+
+**Capital Allocation History**
+- Source: 5 years of annual reports — cash flow statement (capex, dividends, acquisitions, cash build)
+- Show as a stacked bar per year: how was free cash flow used?
+- Flag: >30% going to acquisitions without clear rationale = risk
+
+**Peer Comparison Table**
+- Automatically populated from sector membership (NSE sector index)
+- Columns: ROCE, D/E, order book/revenue, revenue CAGR, promise delivery rate
+- Sortable; current company highlighted
+
+**Valuation Context**
+- PE vs. 3-year historical range: shown as a band with current position marked
+- PE relative to sector peers: is this company expensive or cheap vs. its direct competitors?
+- Not a buy/sell signal — framed as "historical context" only
+- Source: NSE price data (public, scrapeable)
+
+**Working Capital Trend**
+- Debtor days, creditor days, inventory days — tracked quarterly over 8 quarters
+- Chart the trend, not just the number: deteriorating (collecting slower, paying faster) is an early warning of business stress even when revenues look fine
+- Flag: if debtor days have risen >30% over 4 quarters, show warning
+- Source: quarterly results PDFs → balance sheet items
+
+**Company Quality Scorecard**
+- A single composite score per company, combining: ROCE (40%) + debt quality/D/E (20%) + promoter integrity signals (20%) + promise delivery rate (20%)
+- Shown as a colour-coded badge on company cards and at the top of the detail page
+- Not meant to replace analysis — meant to surface which companies deserve deeper attention
+- Recomputed each quarter as new data flows in
+
+**Concall Sentiment Tracker**
+- Beyond extracting specific promises, Claude Sonnet reads the tone of concall transcripts over time
+- Tracks: is management getting more confident or more defensive? Are they raising guidance or hedging it? Are they talking about growth or explaining delays?
+- Displayed as a sentiment trend line: Confident → Cautious → Defensive
+- Particularly useful for catching thesis deterioration before it shows in financials
+- Source: concall transcripts → PDF pipeline → Claude Sonnet analysis
+
+**Institutional Holding Trends**
+- FII (Foreign Institutional Investor), DII (Domestic Institutional), and Mutual Fund % ownership — tracked quarterly
+- Direction matters more than absolute level: FIIs accumulating over 3 quarters while DIIs hold steady = smart money building a position
+- MF exposure: which funds hold this stock, and are they increasing or reducing?
+- "Smart money" signal: if 3+ quality mutual funds (Mirae, Nippon, Parag Parikh) are all increasing exposure, it validates the thesis
+- Source: NSE/BSE shareholding pattern (quarterly public disclosure, scrapeable)
+
+**Policy Risk Tracker**
+- Per reform and per scheme: an explicit risk register, not just a health indicator
+- Risks documented: budget cut risk, scheme restructuring risk, election/political change risk, implementation delay risk, global commodity price risk (for infra)
+- Each risk rated: likelihood (Low/Medium/High) + impact on thesis (Moderate/Severe)
+- Example: Green H₂ Mission — risk: electrolyser import dependency; risk: green H₂ price competitiveness timeline
+- Updated from PIB/news pipeline signals automatically; Claude flags risk-related language in announcements
+- Source: pipeline signals + Claude extraction on risk-related keywords
+
+**Earnings Estimate vs. Actuals**
+- Distinct from the Promises tracker: this tracks numerical financial guidance vs. actual quarterly results
+- If management says "we expect ₹5000cr revenue in Q3" — did Q3 come in at ₹5000cr, above, or below?
+- Tracks the beat/miss pattern over 8–12 quarters
+- Companies that consistently beat guidance are conservative guiders (good). Companies that consistently miss are over-promisers (bad) or facing structural headwinds
+- Shown as a bar chart: guidance bar vs. actual bar per quarter
+- Source: concall transcripts (guidance extraction) + quarterly results PDFs (actuals)
+
+**Forward P&L Estimation**
+- When management gives numerical guidance (capacity, utilization rate, margin per unit, revenue targets), Claude computes the implied P&L scenario and stores it
+- Example: Sambhv Steel management says "2M tons capacity by FY30, 60% utilisation, EBITDA ₹8000–9000/ton" → Claude computes: 2M × 60% × ₹8500 avg = ₹1020 Cr EBITDA → applies historical depreciation + interest to estimate PAT range → "If management delivers: FY30 EBITDA ₹800–1100 Cr, PAT ₹350–550 Cr"
+- Stored alongside the ManagementPromise record as a `projectedScenario` JSON field
+- Displayed on the company page as: "Bull case / Base case / Bear case" with the specific assumptions spelled out
+- Critically — when the actual results arrive, the comparison is automatic: did reality match the projection management itself described?
+- This is what separates a good analyst from someone who just reads the headline — BharatCapex does this computation automatically from the concall text
+- Source: concall transcripts → Claude Sonnet extraction + computation
+
+**Key Person Risk**
+- Is the company a founder-led business? Is the founder still active in operations?
+- Succession planning: is there a named successor, a professional management team, or is the company entirely dependent on one person?
+- For Indian SME/mid-cap companies, founder health is an underappreciated risk
+- Flag if: no professional CEO/CFO listed, founder >65 years old, no succession mentioned in annual report MD&A
+- Source: annual report PDFs (MD&A + board composition) + news pipeline
+
+**Export Orientation**
+- % revenue from exports — tracked annually
+- Trend matters: a company growing from 5% to 20% export revenue over 3 years has proven global competitiveness
+- Particularly relevant for: defence (HAL export orders), electronics (Dixon, Kaynes), pharmaceuticals, chemicals
+- A company winning export orders in a PLI sector means the PLI is working — the product is competitive globally, not just domestically protected
+- Source: annual report PDFs (geographic segment breakdown)
+
+**Dividend and Buyback History**
+- 5-year history of: dividend per share, dividend payout ratio, buybacks (if any)
+- A company that consistently pays dividends even in tough years is generating real cash (not just accounting profit)
+- Buybacks are better than dividends in most cases — management is saying "we have no better use for this cash than returning it to shareholders"
+- Neither is good if funded by debt — check D/E alongside
+- Source: NSE corporate actions data (public, scrapeable)
+
+---
+
+### Data sources for Phase 3
+
+| Feature | Source | Already in pipeline? |
+|---|---|---|
+| ROCE, D/E, revenue growth | Quarterly results PDFs | ❌ PDF pipeline needed |
+| OCF vs PAT | Quarterly results PDFs | ❌ PDF pipeline needed |
+| Order book trajectory | Quarterly results PDFs | ❌ PDF pipeline needed |
+| Working capital trend | Quarterly results PDFs | ❌ PDF pipeline needed |
+| Government receivables | Annual report PDFs | ❌ PDF pipeline needed |
+| Capital allocation history | Annual report PDFs | ❌ PDF pipeline needed |
+| Export orientation | Annual report PDFs (segment data) | ❌ PDF pipeline needed |
+| Key person risk | Annual report PDFs (MD&A + board) | ❌ PDF pipeline needed |
+| Earnings estimate vs actuals | Concall PDFs + quarterly results PDFs | ❌ PDF pipeline needed |
+| Forward P&L estimation | Concall PDFs → Claude Sonnet (extract guidance + compute) | ❌ PDF pipeline needed |
+| Concall sentiment | Concall PDFs → Claude Sonnet | ❌ PDF pipeline needed |
+| Auditor qualifications | Annual report PDFs | ❌ PDF pipeline needed |
+| Promise delivery rate | ManagementPromise table | ❌ PDF pipeline needed |
+| Dividend / buyback history | NSE corporate actions scraper | ❌ New scraper needed |
+| Promoter activity | NSE bulk/block deals scraper | ❌ New scraper needed |
+| Promoter pledge % | NSE shareholding pattern scraper | ❌ New scraper needed |
+| Institutional holding trends | NSE/BSE shareholding pattern scraper | ❌ New scraper needed |
+| PE vs. history + peers | NSE price data scraper | ❌ New scraper needed |
+| Company quality scorecard | Computed from above features | ❌ Requires all above |
+| Sector cycle position | Computed from pipeline signals | ✅ Pipeline signals available |
+| Thesis health indicator | Computed from pipeline signals | ✅ Pipeline signals available |
+| Policy risk tracker | Pipeline signals + Claude extraction | ✅ Pipeline signals available |
+| Supply chain map | Claude Sonnet extraction (new step) | ❌ New extraction step needed |
+
+---
+
+## 12. The Bigger Picture
 
 Once the data pipeline is live and real investment utility is proven:
 
@@ -359,4 +619,4 @@ Once the data pipeline is live and real investment utility is proven:
 
 ---
 
-_Next up: Connect real Anthropic API key → run pipeline → first real extractions. Then connect pages to DB (replace seed-data.ts). Then PDF pipeline for annual reports + Management Promises._
+_Next up: Anthropic API key → run pipeline → first real extractions → nightly cron → company discovery engine to populate structured tables. Then PDF pipeline for annual reports + Management Promises._

@@ -62,7 +62,7 @@ function toNseDateParam(d: Date): string {
   return `${dd}-${mm}-${yy}`
 }
 
-function isSignal(annDesc: string, signalText: string): boolean {
+export function isSignal(annDesc: string, signalText: string): boolean {
   const descLower = annDesc.toLowerCase()
   if (DENYLIST_DESC.some((d) => descLower.includes(d))) return false
 
@@ -70,8 +70,15 @@ function isSignal(annDesc: string, signalText: string): boolean {
   return SIGNAL_KEYWORDS.some((kw) => lower.includes(kw))
 }
 
-async function getSessionCookies(): Promise<string> {
-  const res = await fetch(NSE_HOME, {
+function fetchWithTimeout(url: string, options: RequestInit, ms = 30_000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer))
+}
+
+export async function getSessionCookies(): Promise<string> {
+  const res = await fetchWithTimeout(NSE_HOME, {
     headers: { "User-Agent": UA, "Accept": "text/html" },
     cache: "no-store",
   })
@@ -79,12 +86,12 @@ async function getSessionCookies(): Promise<string> {
   return cookies.map((c) => c.split(";")[0]).join("; ")
 }
 
-async function fetchAnnouncements(cookies: string, fromDate: Date, toDate: Date): Promise<NseAnnouncement[]> {
+export async function fetchAnnouncements(cookies: string, fromDate: Date, toDate: Date): Promise<NseAnnouncement[]> {
   const from = toNseDateParam(fromDate)
   const to   = toNseDateParam(toDate)
   const url  = `${NSE_API}?index=equities&from_date=${from}&to_date=${to}`
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     headers: {
       "User-Agent":  UA,
       "Accept":      "application/json",

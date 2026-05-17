@@ -14,11 +14,11 @@ export function Nav() {
   const pathname = usePathname()
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="font-display text-lg">
-            Bharat<span className="text-blue-600">Capex</span>
+    <header className="sticky top-0 z-50 px-4 pt-4 pb-2 pointer-events-none">
+      <div className="max-w-5xl mx-auto bg-white rounded-full shadow-lg border border-gray-100 px-5 h-14 flex items-center justify-between pointer-events-auto">
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <span className="font-display font-bold text-lg tracking-tight">
+            Bharat<span className="text-orange-500">Capex</span>
           </span>
         </Link>
 
@@ -27,10 +27,10 @@ export function Nav() {
             <Link
               key={href}
               href={href}
-              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+              className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
                 pathname.startsWith(href)
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  ? "bg-orange-500 text-white"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
               }`}
             >
               {label}

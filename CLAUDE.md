@@ -96,11 +96,11 @@ bharat-capex/
 │
 ├── src/
 │   ├── app/
-│   │   ├── page.tsx           Homepage — real DB queries ✅
-│   │   ├── reforms/           Listing + [slug] detail — seed-data (to replace)
-│   │   ├── tenders/           Listing only — seed-data (to replace)
-│   │   ├── companies/         Listing + [slug] detail — seed-data (to replace)
-│   │   └── schemes/           Listing + [slug] detail — seed-data (to replace)
+│   │   ├── page.tsx           Homepage ✅
+│   │   ├── reforms/           Listing + [slug] detail ✅
+│   │   ├── tenders/           Listing ✅
+│   │   ├── companies/         Listing + [slug] detail ✅
+│   │   └── schemes/           Listing + [slug] detail ✅
 │   │
 │   ├── components/
 │   │   ├── ui/                shadcn/ui components (badge, button, card, select...)
@@ -111,7 +111,7 @@ bharat-capex/
 │   │   ├── db.ts              Prisma singleton — use this everywhere
 │   │   ├── utils.ts           cn() helper
 │   │   ├── validations/       Zod schemas (reform, tender, company)
-│   │   ├── data/reforms.ts    Data access layer (reforms only — rest to build)
+│   │   ├── data/              reforms.ts · companies.ts · tenders.ts · schemes.ts · sectors.ts ✅
 │   │   └── pipeline/
 │   │       ├── run.ts         Orchestrator — npm run pipeline:run
 │   │       ├── check-data.ts  Diagnostic — inspect what's stored
@@ -141,11 +141,12 @@ bharat-capex/
 ### What's built
 
 - ✅ All 8 pages complete with full UI (homepage, reforms, tenders, companies, schemes + detail pages)
+- ✅ All pages wired to real DB queries — seed-data.ts fully gone
+- ✅ Full data access layer: `src/lib/data/` — reforms.ts, companies.ts, tenders.ts, schemes.ts, sectors.ts
 - ✅ Design system (Space Grotesk + DM Sans, sector colours, status colours)
-- ✅ Prisma schema written and validated (all models + RawAnnouncement)
+- ✅ Prisma schema written and validated (13 models + RawAnnouncement)
 - ✅ `src/lib/db.ts` — Prisma singleton with pg driver adapter
-- ✅ `src/app/page.tsx` — homepage uses real DB queries (seed-data.ts deleted)
-- ✅ Data pipeline — 5 live sources + AI extraction:
+- ✅ Data pipeline — 5 live sources + AI extraction layer:
   - `sources/nse-filings.ts` — NSE corporate announcements (desc denylist + broad signal keywords)
   - `sources/pib-rss.ts` — PIB press releases with correct English PRID lookup
   - `sources/news-rss.ts` — ET Markets, ET Stocks, ET Industry, BS Markets, Mint RSS
@@ -156,17 +157,18 @@ bharat-capex/
 
 ### What's not built yet
 
-- ❌ Anthropic API key — `.env` has placeholder, Claude extraction won't run until replaced
-- ❌ Data access layer (`src/lib/data/*`) — only reforms.ts exists; company/tender/scheme pages still use seed-data.ts
+- ❌ Structured tables empty — Sector, Company, Reform, Scheme, Tender have no data; pipeline writes to RawAnnouncement only; Phase 2 company discovery engine will promote extracted signals into these tables
+- ❌ Anthropic API key — `.env` has placeholder; Claude extraction won't run until replaced
+- ❌ Nightly pipeline schedule — runs manually via `npm run pipeline:run`; no cron set up yet
 - ❌ /promises page (Management Promises tracker)
 - ❌ /calendar page (Policy Calendar)
 - ❌ /budget page (Budget Tracker)
 - ❌ Annual reports / concall PDF pipeline (ManagementPromise source)
-- ❌ CPPP "Result of Tenders" (awarded contracts) — active tenders work, awards section needs investigation
+- ~~CPPP "Result of Tenders"~~ — investigated and closed; NSE filings cover this better
 
 ### Currently working on
 
-→ Pipeline built and type-checked. Next: set real Anthropic API key → run pipeline → verify extractions. Then connect remaining pages to DB (replace seed-data.ts imports).
+→ Next: set Anthropic API key → run pipeline → verify extractions. Structured tables will be populated by the company discovery engine (Phase 2), not by manual seeding.
 
 ---
 
@@ -205,7 +207,7 @@ Examples of the right level:
 
 4. **No monetisation features.** No subscription walls, payment flows, or premium tiers. Not the current goal.
 
-5. **seed-data.ts is being phased out.** Never add to it. Homepage already uses real DB queries. The remaining pages (companies, tenders, schemes, reforms) still import from it — replace each with a real `src/lib/data/*.ts` query as you go.
+5. **No manual data entry — ever.** This means no seed scripts, no hardcoded bootstrap data, no manually researched figures written into Prisma upserts. If a table is empty, the answer is to build the pipeline step that fills it. Empty pages are acceptable until the automated pipeline does it.
 
 6. **All pages are Server Components by default.** Only reach for `"use client"` when strictly necessary.
 

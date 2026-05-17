@@ -32,7 +32,7 @@ async function fetchHindiPrids(): Promise<{ prid: string; hindiTitle: string }[]
   return results
 }
 
-async function fetchEnglishPrid(hindiPrid: string): Promise<string | null> {
+export async function fetchEnglishPrid(hindiPrid: string): Promise<string | null> {
   try {
     const res  = await fetch(IFRAME_BASE + hindiPrid, { headers: HEADERS })
     const html = await res.text()
@@ -47,7 +47,7 @@ async function fetchEnglishPrid(hindiPrid: string): Promise<string | null> {
   }
 }
 
-async function fetchEnglishBody(engPrid: string): Promise<{ title: string; body: string } | null> {
+export async function fetchEnglishBody(engPrid: string): Promise<{ title: string; body: string } | null> {
   try {
     const res  = await fetch(ENG_BASE + engPrid, { headers: HEADERS })
     const html = await res.text()
@@ -62,20 +62,29 @@ async function fetchEnglishBody(engPrid: string): Promise<{ title: string; body:
       .replace(/\s+/g, " ")
       .trim()
 
-    // Extract title from heading
-    const titleMatch = html.match(/class=["\']heading[^>]*>([^<]+)/i)
-    const title = titleMatch?.[1]?.trim() ?? ""
-    // Body: first 3000 chars of cleaned text (skipping nav boilerplate at top)
-    const body  = clean.slice(0, 3000)
+    // Body: first 3000 chars of cleaned text
+    const body = clean.slice(0, 3000)
+    if (!body) return null
 
-    return title ? { title, body } : null
+    // Try several heading patterns in order of specificity
+    const title =
+      html.match(/class=["'][^"']*heading[^"']*["'][^>]*>\s*([^<]{10,})/i)?.[1]?.trim() ??
+      html.match(/<h1[^>]*>\s*([^<]{10,})/i)?.[1]?.trim() ??
+      html.match(/<h2[^>]*>\s*([^<]{10,})/i)?.[1]?.trim() ??
+      // Fall back to the first substantial sentence in cleaned body text
+      body.split(/[.!?\n]/).find(s => s.trim().length > 20)?.trim() ??
+      ""
+
+    return { title, body }
   } catch {
     return null
   }
 }
 
+export const ENG_BASE_URL = ENG_BASE
+
 // Process in batches to avoid overwhelming the server
-async function batchedMap<T, R>(
+export async function batchedMap<T, R>(
   items: T[],
   fn: (item: T) => Promise<R>,
   batchSize = 5
@@ -121,7 +130,12 @@ export async function syncPibReleases(): Promise<{ fetched: number; saved: numbe
           attachmentUrl: engUrl,
           publishedAt:  new Date(),
         },
-        update: {}, // idempotent — don't overwrite if already processed
+        update: {
+          // Patch body/title if we now have English content (e.g. after a regex fix)
+          // Never touch extractedData/processedAt — those belong to the extraction step
+          body:  body?.body  ? body.body.slice(0, 3000)   : undefined,
+          title: body?.title ? body.title.slice(0, 500)   : undefined,
+        },
       })
       saved++
     } catch {
