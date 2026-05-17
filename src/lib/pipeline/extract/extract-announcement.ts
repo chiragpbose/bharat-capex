@@ -1,7 +1,7 @@
-import { GoogleGenAI } from "@google/genai"
+import Groq from "groq-sdk"
 import { db } from "@/lib/db"
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 export const SYSTEM_PROMPT = `You are a financial data extractor for an Indian equity research platform focused on capital expenditure and infrastructure.
 
 Given a corporate announcement or government press release (in English or Hindi), extract structured data as JSON.
@@ -124,15 +124,16 @@ async function extractOne(raw: { id: string; title: string; body: string | null 
   let text = ""
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const response = await ai.models.generateContent({
-        model:    "gemini-1.5-flash",
-        contents: input,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          responseMimeType:  "application/json",
-        },
+      const response = await groq.chat.completions.create({
+        model:           "llama-3.3-70b-versatile",
+        messages:        [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user",   content: input },
+        ],
+        response_format: { type: "json_object" },
+        max_tokens:      1024,
       })
-      text = response.text ?? ""
+      text = response.choices[0]?.message?.content ?? ""
       break
     } catch (err: unknown) {
       const status  = (err as { status?: number }).status
