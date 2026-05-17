@@ -44,7 +44,7 @@ async function main() {
   const cppp = await syncCpppTenders()
   console.log(`Fetched ${cppp.fetched} tenders, stored ${cppp.saved} rows`)
 
-  console.log("\n── Gemini extraction ─────────────────────────")
+  console.log("\n── Groq extraction ─────────────────────────")
   const processed = await processPendingAnnouncements(50)
   console.log(`Processed ${processed} announcements`)
 
