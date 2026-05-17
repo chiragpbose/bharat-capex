@@ -125,7 +125,7 @@ async function extractOne(raw: { id: string; title: string; body: string | null 
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const response = await ai.models.generateContent({
-        model:    "gemini-2.5-flash",
+        model:    "gemini-1.5-flash",
         contents: input,
         config: {
           systemInstruction: SYSTEM_PROMPT,
@@ -135,7 +135,10 @@ async function extractOne(raw: { id: string; title: string; body: string | null 
       text = response.text ?? ""
       break
     } catch (err: unknown) {
-      const status = (err as { status?: number }).status
+      const status  = (err as { status?: number }).status
+      const message = (err as { message?: string }).message ?? ""
+      // Daily quota exhausted — not recoverable by waiting, propagate a typed signal
+      if (status === 429 && message.includes("PerDay")) throw Object.assign(err as object, { quotaExhausted: true })
       if (attempt < 3) {
         if (status === 429) {
           await new Promise(r => setTimeout(r, 65_000))
@@ -176,10 +179,17 @@ export async function processPendingAnnouncements(limit = 50): Promise<number> {
   const total = pending.length
 
   for (const row of pending) {
-    await extractOne(row)
+    try {
+      await extractOne(row)
+    } catch (err: unknown) {
+      if ((err as { quotaExhausted?: boolean }).quotaExhausted) {
+        console.log(`\n  Daily quota exhausted after ${done} extractions — resuming tomorrow`)
+        return done
+      }
+      throw err
+    }
     done++
     process.stdout.write(`\r  Extracting: ${done}/${total}`)
-    // 4s gap — stays well under free tier rate limits
     if (done < total) await new Promise(r => setTimeout(r, 4_000))
   }
   if (total > 0) console.log()
