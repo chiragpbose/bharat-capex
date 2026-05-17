@@ -1,6 +1,6 @@
 # BharatCapex — Vision, Status & Roadmap
 
-> Last updated: May 2026  
+> Last updated: 2026-05-17  
 > This file is the shared reference between Chirag and Claude. Update it whenever a phase completes or the plan changes.
 
 ---
@@ -104,8 +104,8 @@ _"See the government's money move before the market does."_
 | Scraping (authenticated) | Native `fetch` + cookie grab | NSE — one homepage fetch for Akamai session cookie |
 | Scraping (CAPTCHA) | HTTP POST + alt-text bypass | CPPP — CAPTCHA answer is in the img alt attribute |
 | PDF extraction | pdf-parse + Claude API | Annual reports, concall transcripts — not yet built |
-| AI processing | Claude Haiku 4.5 | Extraction for announcements/news; Sonnet for PDFs |
-| Job scheduling | `tsx` + cron (TBD) | `npm run pipeline:run` for now; scheduling not yet set up |
+| AI processing | Groq Llama 3.3 70B (free) | Extraction for announcements/news; Claude Sonnet for PDFs (not yet built) |
+| Job scheduling | GitHub Actions cron | `0 2 * * *` — 7:30 AM IST daily; manual trigger also available |
 | Raw storage | `RawAnnouncement` table in Supabase | Stores title/body/source before AI extraction |
 
 ---
@@ -199,18 +199,29 @@ prisma/
 
 ## 6. High-Level Roadmap
 
-### Phase 1 — Real Data (IN PROGRESS — ~85% done)
+### Phase 1 — Real Data (COMPLETE — pipeline running, UI gap remains)
 
 Connect the database, build and activate the automated data pipeline.
 
 **Pipeline architecture:**
 ```
-Sources → Scrapers → RawAnnouncement table → Claude extraction → extractedData JSON → Frontend
+Sources → Scrapers → RawAnnouncement table → Groq extraction → extractedData JSON → /signals page → Frontend
 ```
 
-**Done:** Supabase connected, schema live, all 8 pages on real DB queries, full data access layer built, 5 scrapers built (NSE, PIB, News, NITI Aayog, CPPP), Claude Haiku extraction layer built.
+**Done:**
+- Supabase connected, schema live, all 8 pages on real DB queries
+- 5 scrapers live: NSE filings, PIB RSS, ET/BS/Mint news RSS, NITI Aayog, CPPP
+- Groq Llama 3.3 70B extraction layer (free, 1,000 RPD, ~74 rows/day with trimmed prompt)
+- GitHub Actions cron running daily at 7:30 AM IST
+- 12-month historical backfill: **15,764 rows, 3,151 relevant signals** extracted
+- Graceful daily quota handling (no more crashes on TPD limit)
 
-**Remaining:** Set Anthropic API key → run pipeline → verify extraction quality → set up nightly cron → build company discovery engine (Phase 2) to promote extracted signals into structured Company/Tender/Reform records.
+**The gap:** 3,151 signals exist in the DB but are completely invisible — no `/signals` page, and the structured UI tables (Company, Reform, Tender) remain empty. The platform looks empty even though it has a full year of real data. This is the immediate priority.
+
+**Remaining for Phase 1 to feel complete:**
+1. Build `/signals` page — surface the 3,151 extracted signals directly from RawAnnouncement
+2. Deploy to Vercel — get a live URL
+3. Verify Groq TPD fix (tomorrow's cron, 2026-05-18 7:30 AM IST)
 
 ### Phase 2 — Company Discovery Engine
 
@@ -272,44 +283,48 @@ If the product proves genuinely useful and the data is solid, revisit: freemium 
 
 ## 7. Immediate Next Steps
 
-### Step 1: Activate Claude extraction ← current priority
+### Step 1: Build `/signals` page ← current priority
 
-1. Add real `ANTHROPIC_API_KEY` to `.env` (console.anthropic.com)
-2. Run `npm run pipeline:run`
-3. Run `npx tsx src/lib/pipeline/check-data.ts` to verify extraction quality
-4. Check `extractedData` JSON in Supabase — ensure `isRelevant`, `valueCrore`, `summary` fields look right
+The 3,151 extracted relevant signals are in `RawAnnouncement.extractedData` but there is no UI to see them. This is the single most impactful missing feature.
 
-### Step 3: Set up nightly pipeline schedule
+Query: `WHERE processedAt IS NOT NULL AND extractedData->>'isRelevant' = 'true'`, ordered by `publishedAt DESC`.
 
-Run the pipeline automatically every night. Options:
-- **Simplest:** GitHub Actions cron (free, triggers `npm run pipeline:run` on a schedule)
-- **Later:** Supabase Edge Functions or a VPS cron
+Each row shows: date · source · type badge (ORDER_WIN / CAPEX_PLAN / etc.) · value (₹X cr) · summary · link to original.
+Filters: by type, by value threshold, by source.
 
-### ~~Step 4: Investigate CPPP awarded contracts~~ — Done, closed
+This page proves the pipeline is working and makes the platform immediately useful as a research tool.
 
-Investigated. The endpoint requires `year` parameter (was the missing piece). But the listing has no contract value or winner name — both are on session-locked detail pages. Not scrapeable without Playwright. NSE filings cover this better. No further action.
+### Step 2: Deploy to Vercel
+
+Connect GitHub repo to Vercel. Add env vars: `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Five minutes.
+
+### Step 3: Verify Groq TPD fix (2026-05-18 morning)
+
+Check GitHub Actions run on 2026-05-18 at 7:30 AM IST. Confirm extraction reaches row 29+ (was crashing at 28 before the prompt trim). If it completes 50/50, the daily pipeline is stable.
+
+### ~~Step 0: Activate Claude extraction~~ — Done (switched to Groq)
+### ~~Step: Set up nightly cron~~ — Done (GitHub Actions, 0 2 * * *)
+### ~~Step: Investigate CPPP awarded contracts~~ — Done, closed
+
+### Step 4: Company discovery engine (Phase 2)
+
+Once the `/signals` page proves signal quality, start matching company names in `extractedData` back to NSE-listed `Company` records. This populates the structured tables and makes the Reforms/Companies/Sectors pages non-empty.
 
 ### Step 5: PDF pipeline for Management Promises (Phase 3)
 
 File: `src/lib/pipeline/sources/pdf-fetcher.ts`
 
 - Downloads annual reports and concall transcripts attached to NSE/BSE filings
-- Sends to Claude Sonnet (not Haiku — PDFs are complex multi-page documents) with a prompt to extract management promises
+- Sends to **Claude Sonnet** (not Groq — PDFs are complex, Sonnet quality justified) with a prompt to extract management promises
 - Populates the `ManagementPromise` table — what was said, by whom, by when
-- This powers the `/promises` page — the most differentiated feature on the platform
+- Powers the `/promises` page — the most differentiated feature on the platform
+- **Budget carefully** — Anthropic API billed per token. Use Batches API. Verify prompt caching threshold (Sonnet 3.5+ min is 1,024 tokens — much more achievable than Haiku's 4,096).
 
 ### Step 6: Build remaining UI pages
 
 **Management Promises** `/promises` + section on `/companies/[slug]`
-- Quote, speaker, source (concall / annual report / AGM), date, deadline, status
-- No other tool tracks this automatically
-
 **Policy Calendar** `/calendar`
-- Forward-looking: PLI disbursement deadlines, budget dates, scheme windows, upcoming tenders
-- Month/week view, filterable by sector
-
 **Budget Tracker** `/budget`
-- Union Budget allocations by sector, year-over-year comparison
 
 ---
 
@@ -619,4 +634,4 @@ Once the data pipeline is live and real investment utility is proven:
 
 ---
 
-_Next up: Anthropic API key → run pipeline → first real extractions → nightly cron → company discovery engine to populate structured tables. Then PDF pipeline for annual reports + Management Promises._
+_Next up: `/signals` page (surface 3,151 extracted signals) → Vercel deploy → verify Groq TPD fix → company discovery engine to populate structured tables. PDF pipeline + Management Promises is Phase 3._

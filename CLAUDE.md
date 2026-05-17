@@ -138,7 +138,7 @@ bharat-capex/
 
 > **Update this section at the start or end of every session.**
 
-### What's built
+### What's built and working
 
 - ✅ All 8 pages complete with full UI (homepage, reforms, tenders, companies, schemes + detail pages)
 - ✅ All pages wired to real DB queries — seed-data.ts fully gone
@@ -146,29 +146,49 @@ bharat-capex/
 - ✅ Design system (Space Grotesk + DM Sans, sector colours, status colours)
 - ✅ Prisma schema written and validated (13 models + RawAnnouncement)
 - ✅ `src/lib/db.ts` — Prisma singleton with pg driver adapter
-- ✅ Data pipeline — 5 live sources + AI extraction layer:
+- ✅ Data pipeline — 5 live scrapers running daily via GitHub Actions cron (7:30 AM IST):
   - `sources/nse-filings.ts` — NSE corporate announcements (desc denylist + broad signal keywords)
   - `sources/pib-rss.ts` — PIB press releases with correct English PRID lookup
   - `sources/news-rss.ts` — ET Markets, ET Stocks, ET Industry, BS Markets, Mint RSS
   - `sources/niti-scraper.ts` — NITI Aayog publications page (HTML scrape, no RSS)
   - `sources/cppp-scraper.ts` — CPPP high-value tenders (HTTP + CAPTCHA alt-text bypass, no Playwright)
-  - `extract/extract-announcement.ts` — Claude Haiku extraction (isRelevant, type, valueCrore, summary)
+  - `extract/extract-announcement.ts` — **Groq Llama 3.3 70B** extraction (isRelevant, type, valueCrore, summary)
   - `run.ts` — orchestrates all 5 sources then extraction
+- ✅ 12-month historical backfill complete: **15,764 rows in RawAnnouncement, 3,151 extracted as relevant signals**
+- ✅ GitHub Actions cron — `.github/workflows/pipeline.yml` runs daily at 0 2 * * * (7:30 AM IST)
+- ✅ Groq daily quota exhaustion handled gracefully (detects "PerDay" 429, exits cleanly)
+
+### What's broken / not yet verified
+
+- ⚠️ Daily Groq extraction was crashing at row ~28 due to 100k TPD limit — system prompt was ~3,000 tokens, burning quota in 28 calls. **Fix pushed 2026-05-17**: prompt trimmed to ~750 tokens → ~74 rows/day capacity. Not yet verified (today's quota exhausted; verify tomorrow morning 7:30 AM IST in GitHub Actions).
+
+### The core gap — why the UI looks empty
+
+- ❌ **Structured tables (Company, Reform, Tender, Scheme, Sector) have almost no data** — the pipeline writes to `RawAnnouncement` only. The UI pages pull from these empty structured tables. This is why browsing the app shows almost nothing (e.g. only BEL under Semiconductors).
+- ❌ **No /signals page** — the 3,151 extracted relevant signals are invisible. There is no UI to browse them. This is the highest-priority missing feature.
+- ❌ **No Vercel deployment** — no live URL. App only runs on localhost.
 
 ### What's not built yet
 
-- ❌ Structured tables empty — Sector, Company, Reform, Scheme, Tender have no data; pipeline writes to RawAnnouncement only; Phase 2 company discovery engine will promote extracted signals into these tables
-- ❌ Anthropic API key — `.env` has placeholder; Claude extraction won't run until replaced
-- ❌ Nightly pipeline schedule — runs manually via `npm run pipeline:run`; no cron set up yet
-- ❌ /promises page (Management Promises tracker)
-- ❌ /calendar page (Policy Calendar)
-- ❌ /budget page (Budget Tracker)
+- ❌ `/signals` page — browse RawAnnouncement where extractedData.isRelevant = true; the most impactful missing page
+- ❌ Company discovery engine — reads extractedData (company names, awardingBody) and promotes signals into structured Company/Tender tables (Phase 2)
+- ❌ Vercel deployment — no live link yet
+- ❌ `/promises` page (Management Promises tracker)
+- ❌ `/calendar` page (Policy Calendar)
+- ❌ `/budget` page (Budget Tracker)
 - ❌ Annual reports / concall PDF pipeline (ManagementPromise source)
 - ~~CPPP "Result of Tenders"~~ — investigated and closed; NSE filings cover this better
 
+### What failed and why (honest record)
+
+1. **Prompt caching cost disaster (~$24 wasted)** — claimed ~90% cost reduction via Anthropic prompt caching, but it was silently ignored the entire time. Haiku 4.5 requires system prompt ≥4,096 tokens; ours was ~3,000. All 15,764 rows billed at full rate. Lesson: never claim a cost optimisation is working without verifying from docs that the threshold is met.
+2. **Gemini detour** — after running out of Anthropic credit, switched to Gemini 2.5 Flash. Made API claims without consulting docs. 20 RPD limit hit at row 14. Wasted time.
+3. **Groq 100k TPD ceiling** — switched to Groq (correct call — free, 1,000 RPD), but the oversized system prompt meant only 28 rows/day. Pipeline crashed at row 28 every morning. Fixed with prompt trim.
+4. **GitHub Actions secrets mis-setup** — user put all secrets as `KEY=value` pairs in one secret field. Several failed pipeline runs.
+
 ### Currently working on
 
-→ Next: set Anthropic API key → run pipeline → verify extractions. Structured tables will be populated by the company discovery engine (Phase 2), not by manual seeding.
+→ Verify tomorrow's cron run gets past row 28 (Groq TPD fix). Then: build `/signals` page. Then: deploy to Vercel.
 
 ---
 
@@ -233,16 +253,14 @@ Sources → Scrapers → RawAnnouncement table → Claude extraction → extract
 
 ### AI extraction model choice
 
-- **Haiku 4.5** — all announcement/news/tender extraction (fast, cheap, sufficient)
-- **Sonnet 4.6** — annual reports, concall PDFs, complex multi-entity documents (not yet built)
-- Prompt caching on system prompt — ~90% cost reduction on repeated calls
-- Target cost: ~$3–10/month total
+- **Groq Llama 3.3 70B** (`groq-sdk`, model: `llama-3.3-70b-versatile`) — all announcement/news/tender extraction. Free tier: 1,000 RPD, 100k TPD. System prompt trimmed to ~750 tokens → ~74 rows/day capacity.
+- **Claude Sonnet 4.6** — annual reports, concall PDFs, complex multi-entity documents (not yet built). Will require Anthropic API credit — budget carefully.
+- **Do NOT use Anthropic API for bulk extraction again** — prompt caching failed silently (~$24 lesson). Always verify token threshold from docs before claiming caching is active.
 
 ### Still to build
 
 - `pdf-fetcher.ts` — downloads annual reports + concall transcripts from NSE filings
 - `extract-promise.ts` — Claude Sonnet extraction of management promises from PDFs
-- Nightly cron schedule (GitHub Actions or VPS)
 
 ---
 
