@@ -63,8 +63,16 @@ type Extracted = {
   summary:         string
 }
 
+const BODY_CHAR_LIMIT = 1_200
+
+function isDailyQuotaError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return lower.includes("per day") || lower.includes("tpd") || lower.includes("tokens per day")
+}
+
 async function extractOne(raw: { id: string; title: string; body: string | null }): Promise<void> {
-  const input = raw.body ? `${raw.title}\n\n${raw.body}` : raw.title
+  const body  = raw.body ? raw.body.slice(0, BODY_CHAR_LIMIT) : null
+  const input = body ? `${raw.title}\n\n${body}` : raw.title
 
   let text = ""
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -83,8 +91,8 @@ async function extractOne(raw: { id: string; title: string; body: string | null 
     } catch (err: unknown) {
       const status  = (err as { status?: number }).status
       const message = (err as { message?: string }).message ?? ""
-      // Daily quota exhausted — not recoverable by waiting, propagate a typed signal
-      if (status === 429 && message.includes("PerDay")) throw Object.assign(err as object, { quotaExhausted: true })
+      // Daily quota exhausted — not recoverable by retrying, propagate a typed signal
+      if (status === 429 && isDailyQuotaError(message)) throw Object.assign(err as object, { quotaExhausted: true })
       if (attempt < 3) {
         if (status === 429) {
           await new Promise(r => setTimeout(r, 65_000))
