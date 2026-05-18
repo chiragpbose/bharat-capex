@@ -1,7 +1,6 @@
 # BharatCapex — Vision, Status & Roadmap
 
-> Last updated: 2026-05-17  
-> This file is the shared reference between Chirag and Claude. Update it whenever a phase completes or the plan changes.
+> Last updated: 2026-05-19 — project paused. This file is the primary context document for any future session or spinoff discussion.
 
 ---
 
@@ -103,8 +102,8 @@ _"See the government's money move before the market does."_
 | Scraping (static HTML) | Native `fetch` + regex | PIB, NITI Aayog, CPPP (no Cheerio/Playwright needed) |
 | Scraping (authenticated) | Native `fetch` + cookie grab | NSE — one homepage fetch for Akamai session cookie |
 | Scraping (CAPTCHA) | HTTP POST + alt-text bypass | CPPP — CAPTCHA answer is in the img alt attribute |
-| PDF extraction | pdf-parse + Claude API | Annual reports, concall transcripts — not yet built |
-| AI processing | Groq Llama 3.3 70B (free) | Extraction for announcements/news; Claude Sonnet for PDFs (not yet built) |
+| PDF extraction | OpenRouter + DeepSeek V3/V4 | Annual reports, concall transcripts — not yet built; ~20× cheaper than Claude Sonnet, 1M context |
+| AI processing | Groq Llama 3.3 70B (free) | Extraction for announcements/news; ~83 rows/day on free tier |
 | Job scheduling | GitHub Actions cron | `0 2 * * *` — 7:30 AM IST daily; manual trigger also available |
 | Raw storage | `RawAnnouncement` table in Supabase | Stores title/body/source before AI extraction |
 
@@ -114,86 +113,72 @@ _"See the government's money move before the market does."_
 
 ### Pages
 
-| Route               | Status       | Notes                                                                              |
-| ------------------- | ------------ | ---------------------------------------------------------------------------------- |
-| `/`                 | ✅ Complete  | Feed-first, 3 signal cards, activity feed, dual-bar sector chart, company movers   |
-| `/reforms`          | ✅ Complete  | LinkedIn-style dropdown filters (Status + Sector), reform cards with status stripe |
-| `/reforms/[slug]`   | ✅ Complete  | Journey tracker, money metrics, beneficiary companies, related reforms             |
-| `/companies`        | ✅ Complete  | Sector filter pills, company cards, dual-bar sector overview chart                 |
-| `/companies/[slug]` | ✅ Complete  | Financials, tenders won, related reforms, sector exposure                          |
-| `/tenders`          | ✅ Complete  | Sector filter, tender feed with value + company + scheme                           |
-| `/schemes`          | ✅ Complete  | Disbursement progress bars, investment multiplier, jobs targeted                   |
-| `/schemes/[slug]`   | ✅ Complete  | Full scheme detail, listed beneficiaries, linked reforms, related schemes          |
-| `/promises`         | ❌ Not built | Management accountability tracker                                                  |
-| `/calendar`         | ❌ Not built | Forward-looking policy + scheme event calendar                                     |
-| `/contribute`       | ❌ Not built | Deferred indefinitely — no public users, no community layer needed yet             |
-| `/news`             | ❌ Not built | Will be replaced by automated pipeline feed, not a manual page                     |
+| Route               | Status                    | Notes                                                                                        |
+| ------------------- | ------------------------- | -------------------------------------------------------------------------------------------- |
+| `/`                 | ✅ UI complete            | Feed-first, sector chart, company movers — shows empty state (no data in structured tables)  |
+| `/signals`          | ✅ Complete + data        | The ONLY page with real pipeline data — 3,151 extracted signals, filterable by type + source |
+| `/reforms`          | ✅ UI complete            | Dropdown filters — shows empty state (structured Reform table has no rows)                   |
+| `/reforms/[slug]`   | ✅ UI complete            | Journey tracker, money metrics — empty                                                       |
+| `/companies`        | ✅ UI complete            | Sector filters — shows ~1 manually seeded company; otherwise empty                          |
+| `/companies/[slug]` | ✅ UI complete            | Full dossier layout — empty                                                                  |
+| `/tenders`          | ✅ UI complete            | Tender feed — empty (structured Tender table has no rows)                                    |
+| `/schemes`          | ✅ UI complete            | Disbursement progress bars — empty                                                           |
+| `/schemes/[slug]`   | ✅ UI complete            | Full scheme detail — empty                                                                   |
+| `/promises`         | ❌ Not built              | Requires ManagementPromise table (PDF pipeline, Phase 3)                                     |
+| `/calendar`         | ❌ Not built              | Requires structured event data                                                               |
+| `/budget`           | ❌ Not built              | Budget allocations tracker                                                                   |
 
-### Key files
+**Critical distinction:** "UI complete" means the page code exists and queries the DB correctly. It does NOT mean the page shows meaningful data. Only `/signals` has real data because it queries `RawAnnouncement.extractedData` directly. All other pages query structured tables (Company, Reform, Tender, Scheme) that are essentially empty.
+
+### The data that actually exists (in RawAnnouncement)
 
 ```
-src/
-├── app/
-│   ├── page.tsx                         Homepage — real DB queries ✅
-│   ├── reforms/page.tsx                 Reforms listing — real DB queries ✅
-│   ├── reforms/[slug]/page.tsx          Reform detail — real DB queries ✅
-│   ├── companies/page.tsx               Companies listing — real DB queries ✅
-│   ├── companies/[slug]/page.tsx        Company detail — real DB queries ✅
-│   ├── tenders/page.tsx                 Tenders feed — real DB queries ✅
-│   ├── schemes/page.tsx                 Schemes listing — real DB queries ✅
-│   └── schemes/[slug]/page.tsx          Scheme detail — real DB queries ✅
-├── components/
-│   ├── layout/nav.tsx                   Sticky nav
-│   └── reforms/reform-filters.tsx       Client dropdown filters
-├── lib/
-│   ├── db.ts                            Prisma singleton — use this everywhere
-│   ├── utils.ts                         cn() helper
-│   ├── data/
-│   │   ├── reforms.ts                   ✅
-│   │   ├── companies.ts                 ✅
-│   │   ├── tenders.ts                   ✅
-│   │   ├── schemes.ts                   ✅
-│   │   └── sectors.ts                   ✅
-│   ├── validations/                     Zod schemas (reform, tender, company)
-│   └── pipeline/
-│       ├── run.ts                       Pipeline orchestrator — npm run pipeline:run
-│       ├── sources/
-│       │   ├── nse-filings.ts           NSE corporate announcements ✅
-│       │   ├── pib-rss.ts               PIB press releases ✅
-│       │   ├── news-rss.ts              ET/BS/Mint RSS feeds ✅
-│       │   ├── niti-scraper.ts          NITI Aayog publications ✅
-│       │   ├── cppp-scraper.ts          CPPP high-value tenders ✅
-│       │   └── bse-filings.ts           Stub — replaced by NSE
-│       └── extract/
-│           └── extract-announcement.ts  Claude Haiku extraction ✅
-└── generated/prisma/                    Auto-generated Prisma client — never edit
+Total rows:          15,764
+Extracted relevant:   3,151
+Date range:           ~May 2025 – May 2026
+Sources breakdown:    NSE filings + PIB + ET/BS/Mint news + NITI Aayog + CPPP tenders
+```
 
-prisma/
-├── schema.prisma                        Full DB schema (13 models + RawAnnouncement)
-└── prisma.config.ts                     Prisma 7 config
+Each relevant signal has:
+```json
+{
+  "isRelevant": true,
+  "type": "ORDER_WIN",          // ORDER_WIN | CAPEX_PLAN | CAPACITY_EXPANSION |
+                                 // MANAGEMENT_PROMISE | POLICY_UPDATE | OTHER
+  "valueCrore": 2300,           // ₹ crore, or null
+  "awardingBody": "ONGC",       // entity placing the order, or null
+  "completionMonths": 30,       // project duration, or null
+  "summary": "L&T has secured a ₹2,300 crore order from ONGC..."
+}
 ```
 
 ### Design system
 
 - Warm off-white background with subtle dot grid texture
-- Classic blue-600 (`oklch(0.546 0.245 262)`) as primary accent
+- Classic blue-600 as primary accent; orange-500 for active nav state
 - Each sector has its own hex colour used consistently across all pages
 - Status colours: amber=proposed, sky=notified, emerald=implemented/operational, rose=stalled
 - Financial figures always use `font-display` (Space Grotesk) + `tabular-nums`
-- Money pill colours: violet=outlay, emerald=FDI/order book, blue=market opportunity
 
 ---
 
-## 5. Current Limitations
+## 5. Current Limitations (as of 2026-05-19 — project paused)
 
-1. **Structured tables are empty** — All pages are wired to real DB queries, but Sector, Company, Reform, Scheme, and Tender tables have no data. The pipeline only writes to `RawAnnouncement`. These tables will be populated by the company discovery engine (Phase 2), which promotes extracted signals into structured records. No manual seeding.
-2. **Claude extraction not yet running** — The extraction layer is built and type-checked, but `ANTHROPIC_API_KEY` in `.env` is still a placeholder. Set the real key → run `npm run pipeline:run` → first signals in `RawAnnouncement` with `extractedData` populated.
-3. **No pipeline schedule** — The pipeline runs manually via `npm run pipeline:run`. No cron job or scheduled trigger yet. Needs to be set up to run nightly.
-4. **CPPP awarded contracts — closed** — Investigated: endpoint works with `year` parameter, but listing has no value or winner; detail pages are session-locked. NSE filings are the correct source for listed company order wins.
-5. **No PDF pipeline** — Annual reports and concall transcripts are the source for the Management Promises tracker. Not yet built — this is Phase 3.
-6. **Company discovery is missing** — The platform cannot yet surface companies from reforms/tenders automatically. This is the core investment utility and requires the full pipeline to be running first.
-7. **No search** — Can't search across companies, reforms, or tenders. Phase 4.
-8. **No auth** — No user accounts, no watchlists, no personalisation. Phase 4.
+1. **Structured tables are empty** — The pipeline only writes to `RawAnnouncement`. Company, Reform, Tender, Scheme, and Sector tables have almost no data. The "company discovery engine" that would bridge these was never built. This is the central unfinished problem — the platform has 3,151 signals but the polished product UI can't show them.
+
+2. **No Vercel deployment** — The app has never been deployed publicly. No live URL. Only runs on localhost.
+
+3. **Daily extraction is rate-limited** — Groq free tier: 100k tokens/day. With current settings (~1,200 char body truncation), ~83 rows/day extractable. Daily new scraper output is ~100–130 rows, so a small backlog accumulates. Pipeline processes newest-first, so recent signals are always extracted.
+
+4. **No PDF pipeline** — Annual reports and concall transcripts are the source for the Management Promises tracker and financial quality features. Not yet built.
+
+5. **Company discovery is missing** — The platform cannot surface companies from reforms/tenders automatically. This is the core investment utility.
+
+6. **No search, no auth, no personalisation** — Phase 4.
+
+7. **~~CPPP awarded contracts~~** — Investigated and closed. NSE filings cover this better.
+
+8. **~~Claude extraction not running~~** — Resolved: switched to Groq (free). Running daily.
 
 ---
 
@@ -281,50 +266,39 @@ If the product proves genuinely useful and the data is solid, revisit: freemium 
 
 ---
 
-## 7. Immediate Next Steps
+## 7. What to Do When Resuming
 
-### Step 1: Build `/signals` page ← current priority
+### Already done (no longer pending)
+- ~~Build `/signals` page~~ — Done. Filterable feed at `/signals`, added to nav.
+- ~~Set up nightly cron~~ — Done. GitHub Actions `0 2 * * *`.
+- ~~Activate extraction~~ — Done. Groq Llama 3.3 70B, free, running daily.
+- ~~Investigate CPPP awarded contracts~~ — Closed. NSE covers it.
+- ~~Fix Groq crash on quota~~ — Done. Graceful exit on TPD 429. Body truncated to 1,200 chars.
 
-The 3,151 extracted relevant signals are in `RawAnnouncement.extractedData` but there is no UI to see them. This is the single most impactful missing feature.
+### Step 1: Deploy to Vercel
+Connect GitHub repo → Vercel. Add env vars: `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GROQ_API_KEY`. Five minutes. No live URL exists yet.
 
-Query: `WHERE processedAt IS NOT NULL AND extractedData->>'isRelevant' = 'true'`, ordered by `publishedAt DESC`.
+### Step 2: Company discovery engine (Phase 2)
+The most impactful next build. Bridges the pipeline and the UI.
 
-Each row shows: date · source · type badge (ORDER_WIN / CAPEX_PLAN / etc.) · value (₹X cr) · summary · link to original.
-Filters: by type, by value threshold, by source.
+- Download NSE company master CSV (free — symbol, name, sector, ~2,000 listed companies)
+- Seed `Company` table from it (one-time script — NOT manual entry, it's automated from NSE data)
+- For each NSE-origin `RawAnnouncement`, read the company ticker from the metadata already stored and link it to the `Company` record
+- Result: Companies page shows real companies; each company page shows its order wins from the signals feed
 
-This page proves the pipeline is working and makes the platform immediately useful as a research tool.
+Cost: zero. NSE ticker is already in the filing metadata. It's a lookup, not an AI problem.
 
-### Step 2: Deploy to Vercel
+The supply chain inference (second-order reasoning — who else benefits from this PLI announcement?) is Phase 2's ambitious feature and uses Groq. Scope it to high-value signals only (valueCrore > 500).
 
-Connect GitHub repo to Vercel. Add env vars: `DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Five minutes.
+### Step 3: PDF pipeline for Management Promises (Phase 3)
+- Use **OpenRouter + DeepSeek V3/V4** — NOT Anthropic directly. ~20× cheaper, 1M token context, OpenAI-compatible API. (Researched from actual docs 2026-05-17.)
+- Test on one real Indian annual report PDF before any bulk run
+- Downloads annual reports + concall transcripts from NSE filing attachments
+- Extracts: management promises, guidance numbers, ROCE, order book trajectory, auditor qualifications
+- Populates ManagementPromise table → powers /promises page
 
-### Step 3: Verify Groq TPD fix (2026-05-18 morning)
-
-Check GitHub Actions run on 2026-05-18 at 7:30 AM IST. Confirm extraction reaches row 29+ (was crashing at 28 before the prompt trim). If it completes 50/50, the daily pipeline is stable.
-
-### ~~Step 0: Activate Claude extraction~~ — Done (switched to Groq)
-### ~~Step: Set up nightly cron~~ — Done (GitHub Actions, 0 2 * * *)
-### ~~Step: Investigate CPPP awarded contracts~~ — Done, closed
-
-### Step 4: Company discovery engine (Phase 2)
-
-Once the `/signals` page proves signal quality, start matching company names in `extractedData` back to NSE-listed `Company` records. This populates the structured tables and makes the Reforms/Companies/Sectors pages non-empty.
-
-### Step 5: PDF pipeline for Management Promises (Phase 3)
-
-File: `src/lib/pipeline/sources/pdf-fetcher.ts`
-
-- Downloads annual reports and concall transcripts attached to NSE/BSE filings
-- Sends to **Claude Sonnet** (not Groq — PDFs are complex, Sonnet quality justified) with a prompt to extract management promises
-- Populates the `ManagementPromise` table — what was said, by whom, by when
-- Powers the `/promises` page — the most differentiated feature on the platform
-- **Budget carefully** — Anthropic API billed per token. Use Batches API. Verify prompt caching threshold (Sonnet 3.5+ min is 1,024 tokens — much more achievable than Haiku's 4,096).
-
-### Step 6: Build remaining UI pages
-
-**Management Promises** `/promises` + section on `/companies/[slug]`
-**Policy Calendar** `/calendar`
-**Budget Tracker** `/budget`
+### Step 4: Remaining pages
+`/promises`, `/calendar`, `/budget` — all require structured data to be non-trivial.
 
 ---
 
@@ -634,4 +608,92 @@ Once the data pipeline is live and real investment utility is proven:
 
 ---
 
-_Next up: `/signals` page (surface 3,151 extracted signals) → Vercel deploy → verify Groq TPD fix → company discovery engine to populate structured tables. PDF pipeline + Management Promises is Phase 3._
+---
+
+## 9. Post-Mortem — What Went Wrong and Why
+
+This section is a candid account of every significant failure in the project. Written so that a future session — or a spinoff — doesn't repeat them.
+
+---
+
+### Failure 1: The $24 Anthropic Cost Disaster
+
+**What happened:** The pipeline was built to use Claude Haiku 4.5 for extraction. Prompt caching was set up and claimed to give ~90% cost reduction. A 12-month historical backfill of 15,764 rows was run. The bill came to ~$24.
+
+**What actually happened:** Prompt caching was silently ignored the entire time. Claude Haiku 4.5 requires a system prompt of at least 4,096 tokens before caching activates. Our system prompt was ~3,000 tokens. Anthropic does not warn you or throw an error — the API simply bills at full rate. The "cache_write" and "cache_read" token counts in the usage CSV were zero on every single row.
+
+**The root cause:** The caching requirement was asserted from memory rather than verified against actual documentation. A $0 check — looking up "Haiku 4.5 prompt caching minimum tokens" in the Anthropic docs — would have caught this before the backfill ran.
+
+**The consequence:** User ran out of API credit. Had to abandon Anthropic entirely and find a free alternative.
+
+**The lesson:** Never claim a cost optimisation is working without empirically verifying it. For any bulk operation involving API costs, the sequence must be: (1) read actual docs, (2) run a 5-row test and check usage fields, (3) confirm savings, (4) then run at scale.
+
+---
+
+### Failure 2: The Gemini Detour
+
+**What happened:** After the Anthropic disaster, the project needed a free extraction alternative. Gemini 2.5 Flash was proposed as the solution. Claims were made about its rate limits and capabilities without consulting actual documentation. The 20 RPD (requests per day) free tier limit was hit after 14 calls. The pipeline was down again.
+
+**The root cause:** API capability claims were made from training data / memory rather than fetching the actual Gemini documentation. The user explicitly called this out: "Did you get all these facts from thin air or did you consult Gemini documentation?" The answer was yes, thin air. The limit was not 1,000 RPD as claimed — it was 20.
+
+**The consequence:** Wasted time, eroded trust, one more failed pipeline run.
+
+**The lesson:** Before any API integration decision, fetch the actual documentation. Do not make rate limit, pricing, or capability claims from memory. This is now a hard rule in CLAUDE.md.
+
+---
+
+### Failure 3: Multiple Groq Pipeline Crashes
+
+**What happened:** The correct decision was made to switch to Groq (genuinely free, 1,000 RPD). But the pipeline kept crashing in multiple distinct ways:
+
+**Crash A — TPD ceiling at row 28:** The system prompt was still ~3,000 tokens from the Anthropic version. Groq's free tier caps at 100,000 tokens/day. At ~3,500 tokens/call, this meant only 28 rows/day. The pipeline was hitting the ceiling and crashing every morning.
+
+**Crash B — Wrong error string:** The graceful quota exit code checked for `message.includes("PerDay")`. Groq's actual error message says `"tokens per day (TPD)"`. The string mismatch meant the TPD error was never detected as a quota error. Instead of exiting cleanly, the code hit the 65-second retry branch (designed for per-minute limits), waited, tried again, failed again, and eventually threw an unhandled error. GitHub Actions showed exit code 1, not a clean quota message.
+
+**Crash C — No body truncation:** Even after trimming the system prompt to 750 tokens, the body was sent in full. News articles were 2,000+ tokens of body text. Average call was ~2,800 tokens, not the ~1,350 expected. Still hitting the ceiling at row 35 instead of 74.
+
+**The pattern:** Each fix was made reactively after a crash, rather than proactively calculating the expected token budget before deploying. Three separate crashes, each requiring a GitHub commit + push + wait for the next morning's cron to verify.
+
+**The lesson:** Before deploying any rate-limited extraction job, calculate the token math explicitly: (system prompt tokens) + (average user message tokens) + (output tokens) = per-call cost. Then: daily limit ÷ per-call cost = daily row capacity. If capacity < expected daily volume, fix it before deploying.
+
+---
+
+### Failure 4: The Architectural Gap That Was Never Closed
+
+**What happened:** The project built two things in parallel that were never connected:
+
+1. A data pipeline that writes extracted signals to `RawAnnouncement.extractedData`
+2. A polished product UI that reads from structured tables: `Company`, `Reform`, `Tender`, `Scheme`
+
+The connection between them — the "company discovery engine" (Phase 2) — was perpetually deferred as a future milestone. Every session ended with "Phase 2 will populate the structured tables." Phase 2 was never started.
+
+**The result:** After months of work, 15,764 rows of data, and ~$24 in API costs, the platform looked like this to a visitor: one company (BEL) listed under Semiconductors, empty reforms, empty tenders, empty schemes. The 3,151 relevant signals existed in the database but were completely invisible until the `/signals` page was built on the last day.
+
+**Why it happened:** The structured tables were seeded with a handful of manually entered rows early in the project to test the UI. This made the UI look functional during development, which masked the growing disconnect. The pipeline work felt like progress. The UI looked complete. The gap was never felt as a blocker until a screenshot revealed "one company in the world."
+
+**The lesson:** When building a pipeline-fed product, the UI and the pipeline must be connected from day one — even if the connection is simple. The `/signals` page (built last) should have been built first: it takes RawAnnouncement data directly and requires no intermediate structured tables. Start with the simplest possible data → UI connection, then build the structured layer on top.
+
+---
+
+### Failure 5: GitHub Actions Secrets Misconfiguration
+
+**What happened:** The GitHub Actions workflow required three secrets: `DATABASE_URL`, `DIRECT_URL`, and `GROQ_API_KEY`. The user stored all three as `KEY=value` pairs inside a single secret named `BHARATCAPEX`. GitHub Actions secrets are single values — the workflow was reading an empty string for each variable. Multiple failed pipeline runs before the issue was diagnosed.
+
+**The lesson:** When setting up GitHub Actions secrets, each secret is a single value, not a .env file. The secret name in GitHub must exactly match the `${{ secrets.NAME }}` reference in the workflow YAML.
+
+---
+
+### What Was Actually Built Well
+
+It's worth recording what went right, not just what went wrong:
+
+- **The 5 scrapers are solid** — NSE, PIB, ET/BS/Mint, NITI Aayog, CPPP all work reliably. The CAPTCHA bypass for CPPP (alt-text contains the answer) was clever. The PIB English PRID lookup was non-trivial to figure out. These are reusable.
+- **The Groq extraction quality is good** — Llama 3.3 70B classifies signals accurately with only 5 examples in the prompt. ORDER_WIN, CAPEX_PLAN, MANAGEMENT_PROMISE, ROUTINE — the distinctions are being made correctly.
+- **The data itself is valuable** — 3,151 structured capex signals from one year of Indian corporate and government activity. Each with date, source, type, value in crore, awarding body, and a plain-English summary. This is machine-readable, queryable, clean data that doesn't exist anywhere else in this form.
+- **The schema is well-designed** — 13 models covering the full Reform → Scheme → Tender → Company → ManagementPromise chain. It can support the full product vision.
+- **The frontend is complete** — 9 pages, a proper design system, the architecture is right. When the structured tables get populated, the UI is ready.
+- **The pipeline runs every day for free** — GitHub Actions + Groq = zero ongoing cost for scraping and extraction.
+
+---
+
+_Project paused 2026-05-19. Pipeline continues running daily. 3,151 signals in DB. Next meaningful step: deploy to Vercel + build company discovery engine._

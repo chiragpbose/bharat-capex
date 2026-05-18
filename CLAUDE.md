@@ -1,7 +1,7 @@
 # BharatCapex — Claude Code Context
 
 > This file is read by Claude Code at the start of every session.
-> Keep "Current State" updated. Everything else changes rarely.
+> Last updated: 2026-05-19. Project paused.
 
 ---
 
@@ -11,7 +11,7 @@ Personal investment research platform tracking India's industrial buildout.
 Maps the chain: **Policy Reform → Scheme → Tender → Company → Stock thesis.**
 
 Primary user: Chirag (the builder). No public users yet.
-Full product vision: see `VISION.md`
+Full product vision, roadmap, and post-mortem: see `VISION.md`
 
 ---
 
@@ -97,21 +97,28 @@ bharat-capex/
 ├── src/
 │   ├── app/
 │   │   ├── page.tsx           Homepage ✅
-│   │   ├── reforms/           Listing + [slug] detail ✅
-│   │   ├── tenders/           Listing ✅
-│   │   ├── companies/         Listing + [slug] detail ✅
-│   │   └── schemes/           Listing + [slug] detail ✅
+│   │   ├── signals/           Extracted relevant signals feed ✅ (NEW)
+│   │   ├── reforms/           Listing + [slug] detail ✅ (but empty — no data in structured tables)
+│   │   ├── tenders/           Listing ✅ (but empty)
+│   │   ├── companies/         Listing + [slug] detail ✅ (but empty — ~1 company seeded)
+│   │   └── schemes/           Listing + [slug] detail ✅ (but empty)
 │   │
 │   ├── components/
 │   │   ├── ui/                shadcn/ui components (badge, button, card, select...)
-│   │   ├── layout/nav.tsx     Sticky nav
+│   │   ├── layout/nav.tsx     Sticky nav (Signals, Reforms, Tenders, Companies, Schemes)
 │   │   └── reforms/           reform-card.tsx, reform-filters.tsx
 │   │
 │   ├── lib/
 │   │   ├── db.ts              Prisma singleton — use this everywhere
 │   │   ├── utils.ts           cn() helper
 │   │   ├── validations/       Zod schemas (reform, tender, company)
-│   │   ├── data/              reforms.ts · companies.ts · tenders.ts · schemes.ts · sectors.ts ✅
+│   │   ├── data/
+│   │   │   ├── reforms.ts     ✅ (queries structured Reform table — currently empty)
+│   │   │   ├── companies.ts   ✅ (queries structured Company table — ~1 row)
+│   │   │   ├── tenders.ts     ✅ (queries structured Tender table — empty)
+│   │   │   ├── schemes.ts     ✅ (queries structured Scheme table — empty)
+│   │   │   ├── sectors.ts     ✅
+│   │   │   └── signals.ts     ✅ (queries RawAnnouncement.extractedData — 3,151 rows)
 │   │   └── pipeline/
 │   │       ├── run.ts         Orchestrator — npm run pipeline:run
 │   │       ├── check-data.ts  Diagnostic — inspect what's stored
@@ -123,72 +130,61 @@ bharat-capex/
 │   │       │   ├── cppp-scraper.ts   CPPP high-value tenders ✅
 │   │       │   └── bse-filings.ts    Stub — replaced by NSE
 │   │       └── extract/
-│   │           └── extract-announcement.ts  Claude Haiku extraction ✅
+│   │           └── extract-announcement.ts  Groq Llama 3.3 70B extraction ✅
 │   │
 │   └── generated/prisma/      Auto-generated Prisma client — never edit manually
 │
+├── .github/workflows/
+│   └── pipeline.yml           GitHub Actions cron — daily at 0 2 * * * (7:30 AM IST)
+│
 ├── CLAUDE.md                  ← You are here
-├── VISION.md                  Full product vision and roadmap
-└── .env.example               Copy to .env — fill Supabase + Anthropic credentials
+├── VISION.md                  Full product vision, roadmap, and post-mortem
+└── .env.example               Copy to .env — fill Supabase + Groq credentials
 ```
 
 ---
 
-## Current State
+## Current State (as of 2026-05-19 — project paused)
 
-> **Update this section at the start or end of every session.**
+### What is genuinely working
 
-### What's built and working
+- ✅ **9 pages** with full UI: homepage, /signals, /reforms (+ detail), /tenders, /companies (+ detail), /schemes (+ detail)
+- ✅ **Design system**: Space Grotesk + DM Sans, sector colours, status colours, warm off-white background
+- ✅ **Prisma 7 schema**: 13 models + RawAnnouncement, all validated and migrated to Supabase
+- ✅ **5 live data scrapers** running daily via GitHub Actions cron (7:30 AM IST):
+  - `nse-filings.ts` — NSE corporate announcements (HTTP + Akamai cookie)
+  - `pib-rss.ts` — PIB press releases (RSS + PRID English lookup)
+  - `news-rss.ts` — ET Markets, ET Stocks, ET Industry, BS Markets, Mint
+  - `niti-scraper.ts` — NITI Aayog publications (HTML scrape)
+  - `cppp-scraper.ts` — CPPP tenders ≥₹1cr (CAPTCHA bypass via alt-text)
+- ✅ **Groq Llama 3.3 70B extraction** — free, 1,000 RPD, ~83 rows/day with current truncation
+- ✅ **12-month historical backfill complete**: 15,764 rows in RawAnnouncement
+- ✅ **3,151 relevant signals** extracted with structured JSON (isRelevant, type, valueCrore, awardingBody, completionMonths, summary)
+- ✅ **`/signals` page** — the only UI page that currently shows real pipeline data; filterable by type and source
+- ✅ **Graceful daily quota handling** — detects Groq TPD 429 and exits cleanly instead of crashing
 
-- ✅ All 8 pages complete with full UI (homepage, reforms, tenders, companies, schemes + detail pages)
-- ✅ All pages wired to real DB queries — seed-data.ts fully gone
-- ✅ Full data access layer: `src/lib/data/` — reforms.ts, companies.ts, tenders.ts, schemes.ts, sectors.ts
-- ✅ Design system (Space Grotesk + DM Sans, sector colours, status colours)
-- ✅ Prisma schema written and validated (13 models + RawAnnouncement)
-- ✅ `src/lib/db.ts` — Prisma singleton with pg driver adapter
-- ✅ Data pipeline — 5 live scrapers running daily via GitHub Actions cron (7:30 AM IST):
-  - `sources/nse-filings.ts` — NSE corporate announcements (desc denylist + broad signal keywords)
-  - `sources/pib-rss.ts` — PIB press releases with correct English PRID lookup
-  - `sources/news-rss.ts` — ET Markets, ET Stocks, ET Industry, BS Markets, Mint RSS
-  - `sources/niti-scraper.ts` — NITI Aayog publications page (HTML scrape, no RSS)
-  - `sources/cppp-scraper.ts` — CPPP high-value tenders (HTTP + CAPTCHA alt-text bypass, no Playwright)
-  - `extract/extract-announcement.ts` — **Groq Llama 3.3 70B** extraction (isRelevant, type, valueCrore, summary)
-  - `run.ts` — orchestrates all 5 sources then extraction
-- ✅ 12-month historical backfill complete: **15,764 rows in RawAnnouncement, 3,151 extracted as relevant signals**
-- ✅ GitHub Actions cron — `.github/workflows/pipeline.yml` runs daily at 0 2 * * * (7:30 AM IST)
-- ✅ Groq daily quota exhaustion handled gracefully (detects "PerDay" 429, exits cleanly)
+### What is broken or incomplete
 
-### What's broken / not yet verified
+- ❌ **Structured tables are empty** — Company, Reform, Tender, Scheme, Sector have almost no data. The pipeline writes only to `RawAnnouncement`. All UI pages except `/signals` show nothing meaningful. This is the central unfinished problem.
+- ❌ **No Vercel deployment** — app has never been deployed. No live URL. Runs on localhost only.
+- ❌ **Daily extraction limit** — Groq free tier caps at 100k tokens/day. With body truncated at 1,200 chars, ~83 rows/day extractable. Daily new rows from scrapers is ~100–130, so a small backlog accumulates each day. Not critical — pipeline processes newest-first.
+- ❌ **No /promises, /calendar, /budget pages** — deferred; require structured data or PDF pipeline to be meaningful
+- ❌ **No PDF pipeline** — annual reports and concall transcripts not yet fetched or extracted; ManagementPromise table empty
+- ❌ **No company discovery engine** — the step that reads extractedData and promotes signals into Company/Tender structured records has never been built
 
-- ⚠️ Daily Groq extraction was crashing at row ~28 due to 100k TPD limit — system prompt was ~3,000 tokens, burning quota in 28 calls. **Fix pushed 2026-05-17**: prompt trimmed to ~750 tokens → ~74 rows/day capacity. Not yet verified (today's quota exhausted; verify tomorrow morning 7:30 AM IST in GitHub Actions).
+### What failed and the full honest account
 
-### The core gap — why the UI looks empty
+See VISION.md Section 9 (Post-Mortem) for the complete account. Summary:
 
-- ❌ **Structured tables (Company, Reform, Tender, Scheme, Sector) have almost no data** — the pipeline writes to `RawAnnouncement` only. The UI pages pull from these empty structured tables. This is why browsing the app shows almost nothing (e.g. only BEL under Semiconductors).
-- ❌ **No /signals page** — the 3,151 extracted relevant signals are invisible. There is no UI to browse them. This is the highest-priority missing feature.
-- ❌ **No Vercel deployment** — no live URL. App only runs on localhost.
+1. **The $24 Anthropic cost disaster** — prompt caching was claimed to be active and giving ~90% cost reduction. It was silently ignored the entire time. Claude Haiku 4.5 requires system prompt ≥4,096 tokens; ours was ~3,000. All 15,764 rows ran at full price. Cost: ~$24 instead of ~$2–3. User ran out of API credit.
 
-### What's not built yet
+2. **The Gemini detour** — after the Anthropic disaster, switched to Gemini 2.5 Flash. Made claims about API rate limits without consulting actual documentation. 20 RPD limit hit after 14 calls. Wasted time and eroded trust.
 
-- ❌ `/signals` page — browse RawAnnouncement where extractedData.isRelevant = true; the most impactful missing page
-- ❌ Company discovery engine — reads extractedData (company names, awardingBody) and promotes signals into structured Company/Tender tables (Phase 2)
-- ❌ Vercel deployment — no live link yet
-- ❌ `/promises` page (Management Promises tracker)
-- ❌ `/calendar` page (Policy Calendar)
-- ❌ `/budget` page (Budget Tracker)
-- ❌ Annual reports / concall PDF pipeline (ManagementPromise source)
-- ~~CPPP "Result of Tenders"~~ — investigated and closed; NSE filings cover this better
+3. **Multiple Groq pipeline crashes** — correct choice to use Groq (free), but oversized prompt (3,000 tokens) burned quota in 28 calls/day. Fix applied (prompt trimmed to 750 tokens) but quota detection code had a string mismatch ("PerDay" vs "per day") causing hard crashes instead of graceful exits. Took two more iterations to fully fix.
 
-### What failed and why (honest record)
+4. **GitHub Actions secrets misconfiguration** — user stored all secrets as `KEY=value` pairs in one combined secret field. Multiple failed pipeline runs before the issue was diagnosed.
 
-1. **Prompt caching cost disaster (~$24 wasted)** — claimed ~90% cost reduction via Anthropic prompt caching, but it was silently ignored the entire time. Haiku 4.5 requires system prompt ≥4,096 tokens; ours was ~3,000. All 15,764 rows billed at full rate. Lesson: never claim a cost optimisation is working without verifying from docs that the threshold is met.
-2. **Gemini detour** — after running out of Anthropic credit, switched to Gemini 2.5 Flash. Made API claims without consulting docs. 20 RPD limit hit at row 14. Wasted time.
-3. **Groq 100k TPD ceiling** — switched to Groq (correct call — free, 1,000 RPD), but the oversized system prompt meant only 28 rows/day. Pipeline crashed at row 28 every morning. Fixed with prompt trim.
-4. **GitHub Actions secrets mis-setup** — user put all secrets as `KEY=value` pairs in one secret field. Several failed pipeline runs.
-
-### Currently working on
-
-→ Verify tomorrow's cron run gets past row 28 (Groq TPD fix). Then: build `/signals` page. Then: deploy to Vercel.
+5. **Architectural gap never closed** — the pipeline and the UI were built independently and never connected. The structured tables that the UI reads from were always intended to be populated by a "company discovery engine" (Phase 2) that was perpetually deferred. The result: a fully functional pipeline feeding data into a table that nothing reads, and a polished UI reading from tables that are empty.
 
 ---
 
@@ -207,13 +203,7 @@ Chirag is simultaneously learning four things through this project:
 - **Why** this approach over alternatives (the tradeoff)
 - **How it connects** to the broader product or investment thesis where relevant
 
-Keep explanations high-to-medium level. Not line-by-line ("this loop iterates...") but not just "done" either. Think: smart colleague briefing another smart colleague who is new to this specific domain.
-
-Examples of the right level:
-
-- "We're using a singleton pattern for the Prisma client because Next.js hot-reloads the server on every file change during development — without it, you'd exhaust your DB connection pool within minutes."
-- "BSE bulk announcements are the highest-ROI first data source because they're free, structured (CSV), updated daily, and cover every listed company automatically — unlike scraping individual company pages."
-- "This is a Server Component by default, meaning it runs on the server and sends plain HTML to the browser. We only switch to a Client Component when we need interactivity like the dropdown filters."
+Keep explanations high-to-medium level. Not line-by-line but not just "done" either.
 
 ---
 
@@ -227,16 +217,26 @@ Examples of the right level:
 
 4. **No monetisation features.** No subscription walls, payment flows, or premium tiers. Not the current goal.
 
-5. **No manual data entry — ever.** This means no seed scripts, no hardcoded bootstrap data, no manually researched figures written into Prisma upserts. If a table is empty, the answer is to build the pipeline step that fills it. Empty pages are acceptable until the automated pipeline does it.
+5. **No manual data entry — ever.** No seed scripts, no hardcoded bootstrap data, no manually researched figures. If a table is empty, the answer is to build the pipeline step that fills it. Empty pages are acceptable until the automated pipeline does it.
 
 6. **All pages are Server Components by default.** Only reach for `"use client"` when strictly necessary.
+
+7. **Never claim a cost optimisation is working without empirically verifying it.** Check token thresholds, rate limits, and pricing from actual documentation before making any cost estimate or claim. The $24 disaster happened because caching was asserted without verification.
+
+8. **Never make API capability claims without reading the actual docs.** The Gemini detour happened because rate limits were stated from memory rather than verified from documentation.
 
 ---
 
 ## Data Pipeline Architecture
 
 ```
-Sources → Scrapers → RawAnnouncement table → Claude extraction → extractedData JSON → Frontend
+Sources → Scrapers → RawAnnouncement table → Groq extraction → extractedData JSON → /signals page
+                                                                                   ↓ (not yet built)
+                                                                         Company discovery engine
+                                                                                   ↓
+                                                              Company / Tender / Reform structured tables
+                                                                                   ↓
+                                                                    Reforms, Companies, Tenders pages
 ```
 
 ### Live sources (all in `src/lib/pipeline/sources/`)
@@ -244,32 +244,62 @@ Sources → Scrapers → RawAnnouncement table → Claude extraction → extract
 | File | Source | Method |
 |---|---|---|
 | `nse-filings.ts` | NSE corporate announcements | HTTP + homepage cookie; broad keywords + category denylist |
-| `pib-rss.ts` | PIB press releases | RSS + 3-step English PRID lookup (matchAll diff-from-Hindi) |
+| `pib-rss.ts` | PIB press releases | RSS + 3-step English PRID lookup |
 | `news-rss.ts` | ET Markets/Stocks/Industry, BS Markets, Mint | RSS; broad keywords + rupee-with-unit regex |
-| `niti-scraper.ts` | NITI Aayog publications | HTML scrape of `/whats-new` — server-rendered Drupal |
-| `cppp-scraper.ts` | CPPP high-value tenders (Works/Goods/Services ≥₹1–100cr) | HTTP POST + CAPTCHA bypass — alt text contains the answer |
+| `niti-scraper.ts` | NITI Aayog publications | HTML scrape of `/whats-new` |
+| `cppp-scraper.ts` | CPPP high-value tenders (≥₹1–100cr) | HTTP POST + CAPTCHA bypass via alt-text |
 
-**Filtering philosophy:** Scrapers cast a wide net (broad keywords). Claude extraction is the real filter. Only categorical denylist at scrape time — AGM/ESOP/dividend `desc` types for NSE, which are categorically never capex signals.
+**Filtering philosophy:** Scrapers cast a wide net. Groq extraction is the real filter — broad keywords at scrape time, AI decides relevance. Only categorical denylist at scrape time for NSE (AGM/ESOP/dividend types).
 
-### AI extraction model choice
+### AI extraction
 
-- **Groq Llama 3.3 70B** (`groq-sdk`, model: `llama-3.3-70b-versatile`) — all announcement/news/tender extraction. Free tier: 1,000 RPD, 100k TPD. System prompt trimmed to ~750 tokens → ~74 rows/day capacity.
-- **Claude Sonnet 4.6** — annual reports, concall PDFs, complex multi-entity documents (not yet built). Will require Anthropic API credit — budget carefully.
-- **Do NOT use Anthropic API for bulk extraction again** — prompt caching failed silently (~$24 lesson). Always verify token threshold from docs before claiming caching is active.
+- **Model**: Groq `llama-3.3-70b-versatile` — free tier, 1,000 RPD, 100k TPD
+- **Body truncation**: 1,200 chars — limits per-call token cost, preserves signal quality (title carries most info for NSE; first 1,200 chars covers the lede for news)
+- **System prompt**: ~750 tokens (trimmed from 18 to 5 examples — kept ORDER_WIN range midpoint, ROUTINE, CAPEX_PLAN, MANAGEMENT_PROMISE, Hindi input)
+- **Capacity**: ~83 rows/day with current settings
+- **Quota handling**: detects "per day"/"TPD" in 429 message, exits gracefully rather than crashing
 
-### Still to build
+### What the extractedData JSON looks like
 
-- `pdf-fetcher.ts` — downloads annual reports + concall transcripts from NSE filings
-- `extract-promise.ts` — Claude Sonnet extraction of management promises from PDFs
+```json
+{
+  "isRelevant": true,
+  "type": "ORDER_WIN",
+  "valueCrore": 2300,
+  "awardingBody": "ONGC",
+  "completionMonths": 30,
+  "summary": "L&T has secured a ₹2,300 crore order from ONGC to fabricate an offshore oil platform, with completion targeted in 30 months."
+}
+```
+
+Types: `ORDER_WIN` | `CAPEX_PLAN` | `CAPACITY_EXPANSION` | `MANAGEMENT_PROMISE` | `POLICY_UPDATE` | `ROUTINE` | `OTHER`
+
+### Phase 3 PDF pipeline (not yet built)
+
+For annual reports and concall transcripts: plan is to use **OpenRouter + DeepSeek V3/V4** rather than Claude Sonnet directly. ~20× cheaper, 1M token context, OpenAI-compatible API. Test on one sample PDF before committing to bulk run. See VISION.md for full spec.
+
+---
+
+## Environment Variables
+
+```
+DATABASE_URL              Supabase Transaction Pooler (port 6543) — for Prisma queries
+DIRECT_URL                Supabase Direct Connection (port 5432) — for migrations only
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY Server-side only — never expose to browser
+GROQ_API_KEY              Required for extraction — get from console.groq.com (free)
+```
+
+GitHub Actions secrets (each must be a separate secret, not combined):
+- `DATABASE_URL`, `DIRECT_URL`, `GROQ_API_KEY`
 
 ---
 
 ## Fonts
 
 ```ts
-// In layout.tsx
 import { Space_Grotesk, DM_Sans, DM_Mono } from "next/font/google";
-
 // Space_Grotesk → display text, financial figures, numbers (font-display)
 // DM_Sans       → body text (font-sans)
 // DM_Mono       → code, tickers (font-mono)
@@ -277,9 +307,7 @@ import { Space_Grotesk, DM_Sans, DM_Mono } from "next/font/google";
 
 ---
 
-## Sector Colours (used consistently across all pages)
-
-These are defined in the DB `Sector` model. Must stay consistent across any hardcoded references, DB seed scripts, and the frontend.
+## Sector Colours
 
 | Sector                  | Hex       |
 | ----------------------- | --------- |
@@ -298,26 +326,11 @@ These are defined in the DB `Sector` model. Must stay consistent across any hard
 
 ## Status Colours
 
-| Status                    | Colour   |
-| ------------------------- | -------- |
-| Proposed / Announced      | Amber    |
-| Notified                  | Sky blue |
-| Implemented / Operational | Emerald  |
-| Disbursing                | Green    |
-| Stalled / Cancelled       | Rose     |
-| Completed                 | Gray     |
-
----
-
-## Environment Variables
-
-```
-DATABASE_URL              Supabase Transaction Pooler (port 6543) — for Prisma queries
-DIRECT_URL                Supabase Direct Connection (port 5432) — for migrations only
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY Server-side only — never expose to browser
-ANTHROPIC_API_KEY         Required for Claude extraction — get from console.anthropic.com
-```
-
-See `.env.example` for full template.
+| Status               | Colour  |
+| -------------------- | ------- |
+| Proposed / Announced | Amber   |
+| Notified             | Sky     |
+| Implemented          | Emerald |
+| Disbursing           | Green   |
+| Stalled / Cancelled  | Rose    |
+| Completed            | Gray    |
